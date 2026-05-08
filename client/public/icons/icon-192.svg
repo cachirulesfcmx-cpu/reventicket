@@ -1,0 +1,5 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="32" fill="#121212"/>
+  <rect x="48" y="48" width="96" height="96" rx="16" fill="#25D366" transform="rotate(-6 96 96)"/>
+  <text x="96" y="115" text-anchor="middle" fill="white" font-family="system-ui" font-size="64" font-weight="bold">R</text>
+</svg>

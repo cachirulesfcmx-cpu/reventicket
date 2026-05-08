@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "chromium", "glib", "nss", "cups", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXi", "xorg.libXrandr", "xorg.libXrender", "xorg.libxcb", "alsa-lib", "dbus", "at-spi2-atk", "atk", "pango", "cairo", "expat", "fontconfig"]
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"
+
+[variables]
+PUPPETEER_EXECUTABLE_PATH = "/run/current-system/sw/bin/chromium"

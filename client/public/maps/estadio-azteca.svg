@@ -1,0 +1,41 @@
+<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Stadium Background -->
+  <ellipse cx="200" cy="150" rx="190" ry="140" fill="#1a1a2e" stroke="#333" stroke-width="2"/>
+  
+  <!-- Upper Bowl - General -->
+  <path d="M200,10 A190,140 0 0,1 390,150" fill="none" stroke="#ef4444" stroke-width="20" id="general-oriente" class="zone-clickable" data-zone="General Oriente"/>
+  <path d="M200,10 A190,140 0 0,0 10,150" fill="none" stroke="#ef4444" stroke-width="20" id="general-poniente" class="zone-clickable" data-zone="General Poniente"/>
+  
+  <!-- Cabeceras (End zones) -->
+  <path d="M10,150 A190,140 0 0,0 200,290" fill="none" stroke="#f97316" stroke-width="20" id="cabecera-sur" class="zone-clickable" data-zone="Cabecera Sur"/>
+  <path d="M390,150 A190,140 0 0,0 200,290" fill="none" stroke="#f97316" stroke-width="20" id="cabecera-norte" class="zone-clickable" data-zone="Cabecera Norte"/>
+  
+  <!-- Platea Alta -->
+  <ellipse cx="200" cy="150" rx="150" ry="105" fill="none" stroke="#16a34a" stroke-width="18" id="platea-alta" class="zone-clickable" data-zone="Platea Alta"/>
+  
+  <!-- Platea Baja -->
+  <ellipse cx="200" cy="150" rx="115" ry="75" fill="none" stroke="#22c55e" stroke-width="16" id="platea-baja" class="zone-clickable" data-zone="Platea Baja"/>
+  
+  <!-- Cancha VIP (Field Level) -->
+  <ellipse cx="200" cy="150" rx="85" ry="50" fill="none" stroke="#FFD700" stroke-width="14" id="cancha-vip" class="zone-clickable" data-zone="Cancha VIP"/>
+  
+  <!-- Campo de juego -->
+  <rect x="130" y="110" width="140" height="80" rx="5" fill="#2d5a27" stroke="#fff" stroke-width="1"/>
+  
+  <!-- Líneas del campo -->
+  <line x1="200" y1="110" x2="200" y2="190" stroke="#fff" stroke-width="0.5"/>
+  <circle cx="200" cy="150" r="15" fill="none" stroke="#fff" stroke-width="0.5"/>
+  <circle cx="200" cy="150" r="2" fill="#fff"/>
+  
+  <!-- Porterías -->
+  <rect x="130" y="135" width="8" height="30" fill="none" stroke="#fff" stroke-width="0.5"/>
+  <rect x="262" y="135" width="8" height="30" fill="none" stroke="#fff" stroke-width="0.5"/>
+  
+  <!-- Etiquetas -->
+  <text x="200" y="150" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">CANCHA</text>
+  
+  <style>
+    .zone-clickable { cursor: pointer; transition: opacity 0.2s; }
+    .zone-clickable:hover { opacity: 0.7; }
+  </style>
+</svg>
