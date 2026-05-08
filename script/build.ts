@@ -1,57 +1,23 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
-
-const allowlist = [
-  "connect-pg-simple",
-  "cors",
-  "date-fns",
-  "drizzle-orm",
-  "drizzle-zod",
-  "express",
-  "express-rate-limit",
-  "express-session",
-  "memorystore",
-  "passport",
-  "passport-local",
-  "pg",
-  "ws",
-  "zod",
-  "zod-validation-error",
-];
+import { rm } from "fs/promises";
 
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
-
-  console.log("🔨 Building client (React)...");
+  console.log("Building client...");
   await viteBuild();
-
-  console.log("🔨 Building server (Express)...");
-  const pkg = JSON.parse(await readFile("package.json", "utf-8"));
-  const allDeps = [
-    ...Object.keys(pkg.dependencies || {}),
-    ...Object.keys(pkg.devDependencies || {}),
-  ];
-  const externals = allDeps.filter((dep) => !allowlist.includes(dep));
-
+  console.log("Building server...");
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
     bundle: true,
     format: "cjs",
     outfile: "dist/index.cjs",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
+    define: { "process.env.NODE_ENV": '"production"' },
+    external: ["whatsapp-web.js","puppeteer","lightningcss","esbuild","tsx","vite","@babel/core","@babel/preset-typescript","pg-native","fsevents","cpu-features","ssh2"],
     minify: false,
-    external: externals,
     logLevel: "info",
   });
-
-  console.log("✅ Build complete!");
+  console.log("Done!");
 }
-
-buildAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+buildAll().catch((err) => { console.error(err); process.exit(1); });
