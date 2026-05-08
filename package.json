@@ -5,12 +5,12 @@
   "license": "MIT",
   "scripts": {
     "dev": "tsx server/index.ts",
-    "build": "npm run build:client && npm run build:server",
-    "start": "NODE_ENV=production node dist/index.cjs",
+    "build": "npm run build:server",
+    "start": "node dist/index.cjs",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx server/seed.ts",
     "build:client": "vite build",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --outfile=dist/index.cjs --external:whatsapp-web.js --external:puppeteer"
+    "build:server": "esbuild server/index.ts --bundle --platform=node --outfile=dist/index.cjs --external:whatsapp-web.js --external:puppeteer --external:lightningcss --external:esbuild --external:vite --external:tsx --external:@babel/core --external:@babel/preset-typescript --external:pg-native --external:fsevents --format=cjs --log-level=error"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
