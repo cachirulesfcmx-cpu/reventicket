@@ -10,7 +10,7 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx server/seed.ts",
     "build:client": "vite build",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --outfile=dist/index.cjs --external:whatsapp-web.js --external:puppeteer --external:lightningcss --external:esbuild --external:vite --external:tsx --external:@babel/core --external:@babel/preset-typescript --external:pg-native --external:fsevents --format=cjs --log-level=error"
+    "build:server": "esbuild server/index.ts --bundle --platform=node --outfile=dist/index.cjs --external:whatsapp-web.js --external:puppeteer --external:lightningcss --external:esbuild --external:vite --external:tsx --external:@babel/core --external:@babel/preset-typescript --external:pg-native --external:fsevents --external:bcrypt --external:bufferutil --external:utf-8-validate --format=cjs --log-level=error"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
