@@ -1,19 +1,23 @@
-import express, { type Express } from "express";
-import fs from "fs";
+import type { Express } from "express";
 import path from "path";
+import fs from "fs";
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "public");
-  if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
-    );
+  // En producción con Vercel, el frontend lo sirve Vercel, no el servidor
+  if (process.env.NODE_ENV === "production" && process.env.SERVE_STATIC !== "true") {
+    console.log("Modo API: el frontend lo sirve Vercel");
+    return;
   }
 
-  app.use(express.static(distPath));
+  const distPath = path.resolve(process.cwd(), "dist/public");
+  if (!fs.existsSync(distPath)) {
+    console.log("Sin archivos estáticos, modo API puro");
+    return;
+  }
 
-  // fall through to index.html if the file doesn't exist
-  app.use("/{*path}", (_req, res) => {
+  const express = require("express");
+  app.use(express.static(distPath));
+  app.get("*", (_req: any, res: any) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
