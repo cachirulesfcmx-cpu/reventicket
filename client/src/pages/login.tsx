@@ -1,115 +1,434 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
-
-const WA_ICON = (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="#25D366">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-  </svg>
-);
+import { motion, AnimatePresence } from "framer-motion";
+import { Layout } from "@/components/layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { apiRequest } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { useVibrate } from "@/hooks/use-vibrate";
+import { cn } from "@/lib/utils";
 
 export default function Login() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const { vibrateError, vibrateSuccess, vibrateTap } = useVibrate();
+  const [step, setStep] = useState<"phone" | "otp" | "success">("phone");
   const [phone, setPhone] = useState("");
-  const [step, setStep] = useState<"phone"|"otp">("phone");
-  const [otp, setOtp] = useState(["","","","","",""]);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [countdown, setCountdown] = useState(60);
+  const [canResend, setCanResend] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<number | null>(null);
 
-  const sendOTP = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/auth/send-otp", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: `52${phone}` }),
-      });
-      if (!res.ok) throw new Error("Error enviando código");
-      return res.json();
-    },
-    onSuccess: () => { setStep("otp"); toast.success("Código enviado a tu WhatsApp"); },
-    onError: () => { setStep("otp"); toast.success("Código enviado (demo)"); },
-  });
-
-  const verifyOTP = useMutation({
-    mutationFn: async () => {
-      const code = otp.join("");
-      const res = await fetch("/api/auth/verify-otp", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: `52${phone}`, code }),
-      });
-      if (!res.ok) throw new Error("Código incorrecto");
-      return res.json();
-    },
-    onSuccess: () => { toast.success("¡Bienvenido!"); navigate("/"); },
-    onError: () => { toast.success("Verificado (demo)"); navigate("/"); },
-  });
-
-  const inp: React.CSSProperties = {
-    background:"#111",border:"1px solid #282828",borderRadius:10,
-    padding:"10px 12px",color:"#fff",fontSize:14,
-    fontFamily:"Inter,sans-serif",outline:"none",transition:".15s",
+  const formatPhoneDisplay = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, "");
+    if (cleaned.length <= 2) return cleaned;
+    if (cleaned.length <= 6) return `${cleaned.slice(0, 2)} ${cleaned.slice(2)}`;
+    return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 6)} ${cleaned.slice(6, 10)}`;
   };
 
-  return (
-    <div style={{ padding:"32px 16px", animation:"fadein .25s ease" }}>
-      <div style={{ width:64,height:64,borderRadius:20,background:"#25d36618",border:"1px solid #25d36630",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px" }}>
-        {WA_ICON}
-      </div>
-      <h1 style={{ fontSize:22,fontWeight:800,textAlign:"center",marginBottom:6 }}>Entra con WhatsApp</h1>
-      <p style={{ fontSize:14,color:"#888",textAlign:"center",lineHeight:1.5,marginBottom:28 }}>
-        Sin contraseñas. Te enviamos un código OTP directo a tu WhatsApp.
-      </p>
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, "").slice(0, 10);
+    setPhone(value);
+  };
 
-      {step === "phone" ? (
-        <>
-          <div style={{ marginBottom:12 }}>
-            <label style={{ fontSize:11,color:"#666",fontWeight:500,display:"block",marginBottom:4 }}>Tu número de WhatsApp</label>
-            <div style={{ display:"flex" }}>
-              <div style={{ ...inp, borderRight:"none", borderRadius:"10px 0 0 10px", color:"#888", whiteSpace:"nowrap" }}>🇲🇽 +52</div>
-              <input value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g,"").slice(0,10))}
-                type="tel" placeholder="55 1234 5678"
-                style={{ ...inp, flex:1, borderLeft:"none", borderRadius:0, borderRight:"none" }}
-              />
-              <button onClick={() => sendOTP.mutate()}
-                style={{ background:"#3ddc84",border:"none",borderRadius:"0 10px 10px 0",padding:"0 14px",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer" }}>
-                Enviar
-              </button>
-            </div>
-          </div>
-          <button onClick={() => sendOTP.mutate()} disabled={phone.length < 10}
-            style={{ width:"100%",padding:15,borderRadius:14,background:"#3ddc84",color:"#000",fontSize:15,fontWeight:800,border:"none",cursor:"pointer",opacity:phone.length<10?.5:1,boxShadow:"0 4px 20px rgba(61,220,132,.2)" }}>
-            {sendOTP.isPending ? "Enviando..." : "Enviar código por WhatsApp"}
-          </button>
-        </>
-      ) : (
-        <>
-          <p style={{ fontSize:13,color:"#666",textAlign:"center",marginBottom:4 }}>Código enviado a +52 {phone}</p>
-          <div style={{ display:"flex",gap:8,justifyContent:"center",margin:"20px 0" }}>
-            {otp.map((v, i) => (
-              <input key={i} maxLength={1} value={v}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g,"");
-                  const next = [...otp]; next[i] = val;
-                  setOtp(next);
-                  if (val && i < 5) (document.querySelectorAll(".otp-b")[i+1] as HTMLInputElement)?.focus();
+  const startCountdown = () => {
+    setCountdown(60);
+    setCanResend(false);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendOTP = async () => {
+    if (phone.length !== 10) {
+      vibrateError();
+      toast({
+        title: "Número inválido",
+        description: "Ingresa un número de 10 dígitos",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const fullPhone = `52${phone}`;
+      await apiRequest("POST", "/api/otp/send", { phone: fullPhone });
+      vibrateTap();
+      setStep("otp");
+      startCountdown();
+      toast({
+        title: "Código enviado",
+        description: "Revisa tu WhatsApp para el código de verificación",
+      });
+    } catch (error: any) {
+      vibrateError();
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo enviar el código",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    
+    vibrateTap();
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
+
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      nextInput?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-${index - 1}`);
+      prevInput?.focus();
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    const code = otp.join("");
+    if (code.length !== 6) return;
+
+    setIsLoading(true);
+    try {
+      const fullPhone = `52${phone}`;
+      await apiRequest("POST", "/api/otp/verify", { phone: fullPhone, code });
+      
+      vibrateSuccess();
+      setStep("success");
+      
+      setTimeout(() => {
+        toast({
+          title: "¡Bienvenido!",
+          description: "Has iniciado sesión correctamente",
+        });
+        navigate("/");
+      }, 1500);
+    } catch (error: any) {
+      vibrateError();
+      toast({
+        title: "Código incorrecto",
+        description: error.message || "El código no es válido o ha expirado",
+        variant: "destructive",
+      });
+      setOtp(["", "", "", "", "", ""]);
+      document.getElementById("otp-0")?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!canResend) return;
+    await handleSendOTP();
+  };
+
+  const isOtpComplete = otp.every((digit) => digit !== "");
+
+  return (
+    <Layout hideNav>
+      <div className="min-h-[calc(100vh-56px)] flex flex-col overflow-hidden">
+        <AnimatePresence mode="wait">
+          {step === "phone" && (
+            <motion.div
+              key="phone"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="flex-1 flex flex-col px-6 pt-12 pb-8"
+            >
+              <motion.h1 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="text-2xl font-bold text-foreground mb-2"
+              >
+                Inicia sesión con tu teléfono
+              </motion.h1>
+              <motion.p 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="text-muted-foreground mb-8"
+              >
+                Ingresa tu número de teléfono para recibir un código de autenticación
+              </motion.p>
+
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  "flex items-center gap-3 p-4 rounded-xl border bg-card mb-6 transition-all duration-200",
+                  focusedInput === -1 ? "border-primary ring-2 ring-primary/20" : "border-border"
+                )}
+              >
+                <div className="flex items-center gap-2 text-foreground font-medium">
+                  <span className="text-xl">🇲🇽</span>
+                  <span>+52</span>
+                </div>
+                <div className="w-px h-6 bg-border" />
+                <Input
+                  type="tel"
+                  value={formatPhoneDisplay(phone)}
+                  onChange={handlePhoneChange}
+                  onFocus={() => setFocusedInput(-1)}
+                  onBlur={() => setFocusedInput(null)}
+                  placeholder="55 1234 5678"
+                  className="border-0 bg-transparent text-lg font-medium focus-visible:ring-0 p-0"
+                  autoFocus
+                  data-testid="input-phone"
+                />
+              </motion.div>
+
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+                className="flex items-center gap-4 mb-6"
+              >
+                <label className="flex items-center gap-2">
+                  <motion.div 
+                    whileTap={{ scale: 0.9 }}
+                    className="w-5 h-5 rounded bg-primary flex items-center justify-center"
+                  >
+                    <Check className="h-3 w-3 text-white" />
+                  </motion.div>
+                  <span className="text-sm text-foreground">Enviar código por WhatsApp</span>
+                </label>
+              </motion.div>
+
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="text-xs text-muted-foreground mb-8"
+              >
+                Al continuar, recibirás un código de verificación por WhatsApp.
+              </motion.p>
+
+              <div className="mt-auto">
+                <motion.div whileTap={{ scale: 0.98 }} whileHover={{ scale: 1.01 }}>
+                  <Button
+                    onClick={handleSendOTP}
+                    disabled={phone.length !== 10 || isLoading}
+                    className="w-full h-14 text-base font-semibold bg-primary hover:bg-primary/90 relative overflow-hidden"
+                    data-testid="button-siguiente"
+                  >
+                    {isLoading ? (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex items-center gap-2"
+                      >
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Enviando...
+                      </motion.div>
+                    ) : (
+                      "Siguiente"
+                    )}
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+
+          {step === "otp" && (
+            <motion.div
+              key="otp"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="flex-1 flex flex-col px-6 pt-6 pb-8"
+            >
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  setStep("phone");
+                  setOtp(["", "", "", "", "", ""]);
                 }}
-                className="otp-b"
-                style={{ width:46,height:54,borderRadius:12,background:"#1a1a1a",border:"1.5px solid #2a2a2a",
-                  textAlign:"center",fontSize:22,fontWeight:800,color:"#fff",outline:"none",fontFamily:"Inter,sans-serif" }}
-              />
-            ))}
-          </div>
-          <button onClick={() => verifyOTP.mutate()} disabled={otp.join("").length < 6}
-            style={{ width:"100%",padding:15,borderRadius:14,background:"#3ddc84",color:"#000",fontSize:15,fontWeight:800,border:"none",cursor:"pointer",opacity:otp.join("").length<6?.5:1,boxShadow:"0 4px 20px rgba(61,220,132,.2)" }}>
-            {verifyOTP.isPending ? "Verificando..." : "Verificar y entrar"}
-          </button>
-          <p style={{ textAlign:"center",marginTop:12,fontSize:12,color:"#555" }}>
-            ¿No llegó? <span onClick={() => setStep("phone")} style={{ color:"#3ddc84",cursor:"pointer" }}>Reenviar código</span>
-          </p>
-        </>
-      )}
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:12,color:"#555",marginTop:14 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        Gratis · Sin contraseñas · 100% seguro
+                className="flex items-center gap-2 text-foreground mb-8 -ml-1"
+                data-testid="button-back"
+              >
+                <ArrowLeft className="h-6 w-6" />
+              </motion.button>
+
+              <motion.h1 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="text-2xl font-bold text-foreground mb-2"
+              >
+                Ingresa tu código
+              </motion.h1>
+              <motion.p 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="text-muted-foreground mb-2"
+              >
+                Introduce el código enviado al:
+              </motion.p>
+              <motion.p 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-foreground font-bold text-lg mb-8"
+              >
+                +52{phone}
+              </motion.p>
+
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+                className="flex gap-3 justify-center mb-6"
+              >
+                {otp.map((digit, index) => (
+                  <motion.input
+                    key={index}
+                    id={`otp-${index}`}
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    onFocus={() => setFocusedInput(index)}
+                    onBlur={() => setFocusedInput(null)}
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ 
+                      scale: digit ? 1.05 : 1, 
+                      opacity: 1,
+                      borderColor: focusedInput === index ? "hsl(var(--primary))" : digit ? "hsl(var(--primary) / 0.5)" : "hsl(var(--border))"
+                    }}
+                    transition={{ 
+                      delay: index * 0.05,
+                      scale: { type: "spring", stiffness: 300, damping: 20 }
+                    }}
+                    className={cn(
+                      "w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 bg-card text-foreground focus:outline-none transition-all duration-200",
+                      digit && "animate-bounce-in"
+                    )}
+                    autoFocus={index === 0}
+                    data-testid={`input-otp-${index}`}
+                  />
+                ))}
+              </motion.div>
+
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="text-center text-sm text-muted-foreground mb-8"
+              >
+                ¿No recibiste el código?{" "}
+                {canResend ? (
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleResend}
+                    className="text-primary font-medium hover:underline"
+                    data-testid="button-resend"
+                  >
+                    Reenviar
+                  </motion.button>
+                ) : (
+                  <span>Reenviar en {String(Math.floor(countdown / 60)).padStart(2, "0")}:{String(countdown % 60).padStart(2, "0")}</span>
+                )}
+              </motion.div>
+
+              <div className="mt-auto">
+                <motion.div whileTap={{ scale: 0.98 }} whileHover={{ scale: 1.01 }}>
+                  <Button
+                    onClick={handleVerifyOTP}
+                    disabled={!isOtpComplete || isLoading}
+                    className="w-full h-14 text-base font-semibold bg-primary hover:bg-primary/90 disabled:opacity-50"
+                    data-testid="button-verify"
+                  >
+                    {isLoading ? (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex items-center gap-2"
+                      >
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Verificando...
+                      </motion.div>
+                    ) : (
+                      "Siguiente"
+                    )}
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+
+          {step === "success" && (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="flex-1 flex flex-col items-center justify-center px-6"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 15 }}
+                className="w-24 h-24 rounded-full bg-primary flex items-center justify-center mb-6"
+              >
+                <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <motion.path
+                    d="M5 13l4 4L19 7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ delay: 0.4, duration: 0.4, ease: "easeOut" }}
+                  />
+                </svg>
+              </motion.div>
+              <motion.h2
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="text-2xl font-bold text-foreground mb-2"
+              >
+                ¡Bienvenido!
+              </motion.h2>
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className="text-muted-foreground text-center"
+              >
+                Sesión iniciada correctamente
+              </motion.p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </Layout>
   );
 }

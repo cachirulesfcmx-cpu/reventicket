@@ -1,198 +1,766 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Layout } from "@/components/layout";
+import { useEvents, useVenues, useOrders, useDeleteEvent, useWhatsAppStatus } from "@/lib/api";
+import { QRCodeSVG } from "qrcode.react";
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription,
+  CardFooter 
+} from "@/components/ui/card";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { 
+  BarChart, Users, Ticket, DollarSign, Settings, 
+  Map as MapIcon, Percent, CreditCard, Eye, Save, Trash2, Edit, Plus, Loader2, MessageCircle, CheckCircle2, XCircle
+} from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useState } from "react";
-import { useLocation } from "wouter";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function Admin() {
-  const qc = useQueryClient();
-  const [, navigate] = useLocation();
-  const [tab, setTab] = useState("events");
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title:"", category:"Concierto", date:"", venueId:"", image:"", description:"" });
+  const { toast } = useToast();
+  const { data: events = [], isLoading: eventsLoading } = useEvents();
+  const { data: venues = [] } = useVenues();
+  const { data: orders = [] } = useOrders();
+  const deleteEventMutation = useDeleteEvent();
 
-  const { data: events } = useQuery({ queryKey:["/api/events"], retry:false });
-  const { data: orders } = useQuery({ queryKey:["/api/admin/orders"], retry:false });
-  const { data: waStatus } = useQuery({ queryKey:["/api/whatsapp/status"], retry:false, refetchInterval:10000 });
+  const handleSaveConfig = () => {
+    toast({
+      title: "Configuración guardada",
+      description: "Los cambios han sido aplicados correctamente.",
+    });
+  };
 
-  const createEvent = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/events", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ ...form, date: new Date(form.date).toISOString() }),
+  const handleDeleteEvent = async (eventId: string, eventTitle: string) => {
+    try {
+      await deleteEventMutation.mutateAsync(eventId);
+      toast({
+        title: "Evento eliminado",
+        description: `"${eventTitle}" ha sido eliminado correctamente.`,
       });
-      if (!res.ok) throw new Error("Error");
-      return res.json();
-    },
-    onSuccess: () => { toast.success("Evento creado"); qc.invalidateQueries({queryKey:["/api/events"]}); setShowForm(false); },
-    onError: () => toast.error("Error creando evento"),
-  });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el evento.",
+        variant: "destructive",
+      });
+    }
+  };
 
-  const deleteEvent = useMutation({
-    mutationFn: async (id:string) => {
-      await fetch(`/api/events/${id}`, { method:"DELETE" });
-    },
-    onSuccess: () => { toast.success("Evento eliminado"); qc.invalidateQueries({queryKey:["/api/events"]}); },
-  });
+  // Calculate KPIs from real data
+  const totalSales = orders.reduce((sum, order) => sum + parseFloat(order.totalAmount || "0"), 0);
+  const totalFees = orders.reduce((sum, order) => sum + parseFloat(order.fees || "0"), 0);
+  const completedOrders = orders.filter(o => o.status === "completed");
 
-  const wa = waStatus as any;
-  const evList = (events as any[]) || [];
-  const orList = (orders as any[]) || [];
-
-  const TABS = ["events","orders","whatsapp"];
-  const TAB_LABELS: Record<string,string> = { events:"Eventos", orders:"Órdenes", whatsapp:"WhatsApp" };
-
-  const inp: React.CSSProperties = { background:"#111",border:"1px solid #282828",borderRadius:10,padding:"10px 12px",color:"#fff",fontSize:14,fontFamily:"Inter,sans-serif",outline:"none",width:"100%" };
+  // Get venue name by ID
+  const getVenueName = (venueId: string) => {
+    const venue = venues.find(v => v.id === venueId);
+    return venue?.name || "Recinto";
+  };
 
   return (
-    <div style={{ background:"#0d0d0d",minHeight:"100vh",color:"#fff",fontFamily:"Inter,sans-serif" }}>
-      {/* Header */}
-      <div style={{ padding:"20px 16px 0",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-        <h1 style={{ fontSize:22,fontWeight:800 }}>Panel Admin</h1>
-        <button onClick={() => navigate("/")} style={{ background:"#1e1e1e",border:"1px solid #333",borderRadius:10,padding:"8px 14px",color:"#aaa",fontSize:13,cursor:"pointer" }}>
-          Salir
-        </button>
-      </div>
-
-      {/* KPIs */}
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"16px 16px 0" }}>
-        {[
-          { label:"Ventas hoy", val:"$48,200", delta:"↑ 12%", green:true },
-          { label:"Órdenes", val: orList.length || "127", delta:"↑ 8 esta hora", green:true },
-          { label:"Eventos activos", val: evList.length || "38", delta:"Publicados", green:false },
-          { label:"Comisiones", val:"$7,230", delta:"15% promedio", green:true },
-        ].map(k => (
-          <div key={k.label} style={{ background:"#151515",border:"1px solid #222",borderRadius:12,padding:14 }}>
-            <div style={{ fontSize:11,color:"#666",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em" }}>{k.label}</div>
-            <div style={{ fontSize:20,fontWeight:700,color:k.green?"#3ddc84":"#fff" }}>{k.val}</div>
-            <div style={{ fontSize:11,color:"#3ddc84",marginTop:2 }}>{k.delta}</div>
+    <Layout>
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Admin Sidebar */}
+        <aside className="w-64 border-r bg-muted/10 hidden md:block overflow-y-auto">
+          <div className="p-6">
+            <h2 className="font-heading font-bold text-xl text-primary mb-6">Admin Panel</h2>
+            <nav className="space-y-2">
+              <Button variant="secondary" className="w-full justify-start gap-2" data-testid="nav-dashboard">
+                <BarChart className="h-4 w-4" />
+                Dashboard
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-events">
+                <Ticket className="h-4 w-4" />
+                Eventos
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-users">
+                <Users className="h-4 w-4" />
+                Usuarios
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-sales">
+                <DollarSign className="h-4 w-4" />
+                Ventas
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-maps">
+                <MapIcon className="h-4 w-4" />
+                Mapas de Recintos
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-discounts">
+                <Percent className="h-4 w-4" />
+                Descuentos
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-config">
+                <Settings className="h-4 w-4" />
+                Configuración
+              </Button>
+            </nav>
           </div>
-        ))}
-      </div>
+        </aside>
 
-      {/* Tabs */}
-      <div style={{ display:"flex",gap:6,padding:"16px 16px 0",overflowX:"auto",scrollbarWidth:"none" }}>
-        {TABS.map(t => (
-          <div key={t} onClick={() => setTab(t)}
-            style={{ flexShrink:0,padding:"6px 14px",borderRadius:999,fontSize:13,fontWeight:600,cursor:"pointer",border:`1px solid ${tab===t?"#3ddc84":"#2a2a2a"}`,background:tab===t?"#0d1a12":"#1a1a1a",color:tab===t?"#3ddc84":"#888" }}>
-            {TAB_LABELS[t]}
-          </div>
-        ))}
-      </div>
+        {/* Main Content */}
+        <div className="flex-1 overflow-auto p-8 bg-muted/5">
+          <Tabs defaultValue="dashboard" className="w-full">
+            <div className="flex justify-between items-center mb-8">
+              <h1 className="text-3xl font-heading font-bold">Panel de Administración</h1>
+              <TabsList>
+                <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
+                <TabsTrigger value="events" data-testid="tab-events">Eventos</TabsTrigger>
+                <TabsTrigger value="sales" data-testid="tab-sales">Ventas</TabsTrigger>
+                <TabsTrigger value="users" data-testid="tab-users">Usuarios</TabsTrigger>
+                <TabsTrigger value="whatsapp" data-testid="tab-whatsapp">WhatsApp</TabsTrigger>
+                <TabsTrigger value="config" data-testid="tab-config">Configuración</TabsTrigger>
+              </TabsList>
+            </div>
 
-      <div style={{ padding:"16px 16px 32px" }}>
-
-        {/* EVENTS TAB */}
-        {tab === "events" && (
-          <>
-            <button onClick={() => setShowForm(!showForm)}
-              style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",padding:14,borderRadius:14,border:"1px dashed rgba(61,220,132,.3)",background:"rgba(61,220,132,.05)",color:"#3ddc84",fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:14 }}>
-              + Publicar nuevo evento
-            </button>
-
-            {showForm && (
-              <div style={{ background:"#151515",border:"1px solid #222",borderRadius:14,padding:16,marginBottom:14 }}>
-                <h3 style={{ fontSize:15,fontWeight:700,marginBottom:12 }}>Nuevo evento</h3>
-                <div style={{ marginBottom:8 }}><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Título</label><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Nombre del evento" style={inp}/></div>
-                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
-                  <div><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Categoría</label>
-                    <select value={form.category} onChange={e=>setForm({...form,category:e.target.value})} style={{ ...inp }}>
-                      {["Concierto","Deportes","Festival","Teatro","F1"].map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Fecha</label><input type="datetime-local" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} style={inp}/></div>
-                </div>
-                <div style={{ marginBottom:8 }}><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>URL imagen</label><input value={form.image} onChange={e=>setForm({...form,image:e.target.value})} placeholder="https://..." style={inp}/></div>
-                <div style={{ marginBottom:12 }}><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Descripción</label><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Descripción del evento..." style={{ ...inp, minHeight:80, resize:"vertical" as any }}/></div>
-                <div style={{ display:"flex",gap:8 }}>
-                  <button onClick={() => createEvent.mutate()} style={{ flex:1,padding:12,borderRadius:10,background:"#3ddc84",color:"#000",fontWeight:700,border:"none",cursor:"pointer" }}>
-                    {createEvent.isPending ? "Guardando..." : "Publicar evento"}
-                  </button>
-                  <button onClick={() => setShowForm(false)} style={{ padding:"12px 16px",borderRadius:10,background:"#1e1e1e",color:"#888",fontWeight:600,border:"1px solid #333",cursor:"pointer" }}>
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {evList.map((ev: any) => (
-              <div key={ev.id} style={{ display:"flex",gap:12,alignItems:"center",background:"#151515",border:"1px solid #222",borderRadius:14,padding:14,marginBottom:6 }}>
-                <img src={ev.image || `https://picsum.photos/seed/${ev.id}/200/200`} alt="" style={{ width:48,height:48,borderRadius:10,objectFit:"cover",flexShrink:0 }}
-                  onError={(e:any)=>{ e.target.src=`https://picsum.photos/seed/ev${ev.id}/200/200`; }}
+            {/* DASHBOARD TAB */}
+            <TabsContent value="dashboard" className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <KpiCard 
+                  title="Ventas Totales" 
+                  value={`$${totalSales.toLocaleString()}`} 
+                  sub={`${orders.length} órdenes`} 
+                  icon={DollarSign} 
                 />
-                <div style={{ flex:1,minWidth:0 }}>
-                  <div style={{ fontSize:14,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.title}</div>
-                  <div style={{ fontSize:12,color:"#666",marginTop:2 }}>{ev.category} · {new Date(ev.date).toLocaleDateString("es-MX")}</div>
-                </div>
-                <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-                  <button style={{ width:32,height:32,borderRadius:8,border:"1px solid #2a2a2a",background:"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#888" }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </button>
-                  <button onClick={() => deleteEvent.mutate(ev.id)} style={{ width:32,height:32,borderRadius:8,border:"1px solid #3a1a1a",background:"#1a0a0a",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#ff6666" }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                  </button>
-                </div>
+                <KpiCard 
+                  title="Boletos Vendidos" 
+                  value={completedOrders.length.toString()} 
+                  sub="Completados" 
+                  icon={Ticket} 
+                />
+                <KpiCard 
+                  title="Eventos Activos" 
+                  value={events.length.toString()} 
+                  sub="En la plataforma" 
+                  icon={BarChart} 
+                />
+                <KpiCard 
+                  title="Comisiones" 
+                  value={`$${totalFees.toLocaleString()}`} 
+                  sub="Ingresos por fees" 
+                  icon={Percent} 
+                />
               </div>
-            ))}
-            {evList.length === 0 && <div style={{ textAlign:"center",color:"#444",padding:32 }}>Sin eventos publicados</div>}
-          </>
-        )}
 
-        {/* ORDERS TAB */}
-        {tab === "orders" && (
-          <>
-            <h3 style={{ fontSize:15,fontWeight:700,marginBottom:12 }}>Órdenes recientes</h3>
-            {orList.length ? orList.slice(0,20).map((o:any) => (
-              <div key={o.id} style={{ background:"#151515",border:"1px solid #222",borderRadius:12,padding:14,marginBottom:6 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
-                  <span style={{ fontSize:13,fontWeight:600 }}>#{o.id?.slice(0,8)}</span>
-                  <span style={{ fontSize:13,fontWeight:700,color:"#3ddc84" }}>${o.totalAmount}</span>
-                </div>
-                <div style={{ fontSize:12,color:"#666" }}>{o.phone} · {o.paymentMethod} · {o.status}</div>
+              <div className="grid md:grid-cols-2 gap-8">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Órdenes Recientes</CardTitle>
+                    <CardDescription>Últimas transacciones en la plataforma</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {orders.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No hay órdenes registradas
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="text-right">Monto</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {orders.slice(0, 5).map((order) => (
+                            <TableRow key={order.id} data-testid={`order-row-${order.id}`}>
+                              <TableCell className="font-mono text-xs">{order.id.slice(0, 8)}</TableCell>
+                              <TableCell>
+                                <Badge variant={order.status === "completed" ? "default" : "secondary"}>
+                                  {order.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-bold">${parseFloat(order.totalAmount || "0").toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Eventos Destacados</CardTitle>
+                    <CardDescription>Eventos en la plataforma</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {eventsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {events.slice(0, 5).map((e, i) => (
+                          <div key={e.id} className="flex items-center justify-between" data-testid={`featured-event-${e.id}`}>
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-muted-foreground text-sm">#{i + 1}</span>
+                              <span className="font-medium truncate max-w-[200px]">{e.title}</span>
+                            </div>
+                            <Badge variant="outline">{e.category}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-            )) : <div style={{ textAlign:"center",color:"#444",padding:32 }}>Sin órdenes aún</div>}
-          </>
-        )}
+            </TabsContent>
 
-        {/* WHATSAPP TAB */}
-        {tab === "whatsapp" && (
-          <>
-            <div style={{ background:"#151515",border:`1px solid ${wa?.isReady?"#1a3522":"#333"}`,borderRadius:14,padding:16,marginBottom:12 }}>
-              <div style={{ display:"flex",alignItems:"center",gap:12 }}>
-                <div style={{ width:10,height:10,borderRadius:"50%",background:wa?.isReady?"#25d366":"#666",flexShrink:0,boxShadow:wa?.isReady?"0 0 8px #25d366":undefined }}/>
+            {/* EVENTS TAB */}
+            <TabsContent value="events" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Gestión de Eventos</h2>
+                <Button data-testid="btn-new-event">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Evento
+                </Button>
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  {eventsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : events.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      No hay eventos registrados
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Evento</TableHead>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead>Recinto</TableHead>
+                          <TableHead>Categoría</TableHead>
+                          <TableHead>Precio Min</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {events.map((event) => (
+                          <TableRow key={event.id} data-testid={`event-row-${event.id}`}>
+                            <TableCell className="font-medium max-w-[200px] truncate">{event.title}</TableCell>
+                            <TableCell>{format(new Date(event.date), "dd MMM yyyy", { locale: es })}</TableCell>
+                            <TableCell>{getVenueName(event.venueId)}</TableCell>
+                            <TableCell><Badge variant="outline">{event.category}</Badge></TableCell>
+                            <TableCell>${event.minPrice ? parseFloat(event.minPrice).toLocaleString() : "N/A"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button variant="ghost" size="icon" data-testid={`btn-edit-${event.id}`}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" data-testid={`btn-delete-${event.id}`}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>¿Eliminar evento?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Esta acción no se puede deshacer. Se eliminará permanentemente el evento "{event.title}" y todos sus boletos asociados.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction 
+                                        onClick={() => handleDeleteEvent(event.id, event.title)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Eliminar
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* SALES TAB */}
+            <TabsContent value="sales" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+               <h2 className="text-xl font-bold">Reporte de Ventas</h2>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <Card>
+                   <CardHeader className="pb-2">
+                     <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos Totales (Neto)</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                     <div className="text-2xl font-bold">${totalSales.toLocaleString()}</div>
+                   </CardContent>
+                 </Card>
+                 <Card>
+                   <CardHeader className="pb-2">
+                     <CardTitle className="text-sm font-medium text-muted-foreground">Comisiones (Fees)</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                     <div className="text-2xl font-bold text-green-600">${totalFees.toLocaleString()}</div>
+                   </CardContent>
+                 </Card>
+                 <Card>
+                   <CardHeader className="pb-2">
+                     <CardTitle className="text-sm font-medium text-muted-foreground">Ticket Promedio</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                     <div className="text-2xl font-bold">
+                       ${orders.length > 0 ? Math.round(totalSales / orders.length).toLocaleString() : "0"}
+                     </div>
+                   </CardContent>
+                 </Card>
+               </div>
+               
+               <Card>
+                 <CardHeader>
+                   <CardTitle>Historial de Transacciones</CardTitle>
+                 </CardHeader>
+                 <CardContent>
+                   {orders.length === 0 ? (
+                     <div className="text-center py-8 text-muted-foreground">
+                       No hay transacciones registradas
+                     </div>
+                   ) : (
+                     <Table>
+                       <TableHeader>
+                         <TableRow>
+                           <TableHead>ID Orden</TableHead>
+                           <TableHead>Fecha</TableHead>
+                           <TableHead>Método de Pago</TableHead>
+                           <TableHead>Estado</TableHead>
+                           <TableHead className="text-right">Total</TableHead>
+                         </TableRow>
+                       </TableHeader>
+                       <TableBody>
+                         {orders.map((order) => (
+                           <TableRow key={order.id} data-testid={`sales-row-${order.id}`}>
+                             <TableCell className="font-mono text-xs">{order.id.slice(0, 8)}</TableCell>
+                             <TableCell>{format(new Date(order.createdAt), "dd MMM yyyy HH:mm", { locale: es })}</TableCell>
+                             <TableCell className="capitalize">{order.paymentMethod || "N/A"}</TableCell>
+                             <TableCell>
+                               <Badge 
+                                 variant={order.status === "completed" ? "default" : order.status === "pending" ? "secondary" : "destructive"}
+                               >
+                                 {order.status}
+                               </Badge>
+                             </TableCell>
+                             <TableCell className="text-right font-bold">${parseFloat(order.totalAmount || "0").toLocaleString()}</TableCell>
+                           </TableRow>
+                         ))}
+                       </TableBody>
+                     </Table>
+                   )}
+                 </CardContent>
+               </Card>
+            </TabsContent>
+
+            {/* USERS TAB */}
+            <TabsContent value="users" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+              <h2 className="text-xl font-bold">Usuarios Registrados</h2>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>La gestión de usuarios estará disponible próximamente.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* WHATSAPP TAB */}
+            <WhatsAppTab />
+
+            {/* CONFIG TAB */}
+            <TabsContent value="config" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+              <h2 className="text-xl font-bold">Configuración del Sistema</h2>
+              
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Payment Methods */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CreditCard className="h-5 w-5" />
+                      Métodos de Pago
+                    </CardTitle>
+                    <CardDescription>Activa o desactiva pasarelas de pago y configura sus credenciales</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Clip Config */}
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Tarjeta de Crédito (Clip)</Label>
+                        <div className="text-xs text-muted-foreground">Procesamiento vía API Clip</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" data-testid="btn-config-clip">
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Configuración Clip</DialogTitle>
+                              <DialogDescription>Ingresa las llaves de producción de tu cuenta Clip.</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label>API Key (Public)</Label>
+                                <Input placeholder="pk_prod_..." data-testid="input-clip-api-key" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Secret Key</Label>
+                                <Input type="password" placeholder="sk_prod_..." data-testid="input-clip-secret" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Webhook URL</Label>
+                                <Input value="https://reventicket.com/api/webhooks/clip" readOnly className="bg-muted" />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button onClick={handleSaveConfig} data-testid="btn-save-clip">Guardar</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Switch defaultChecked data-testid="switch-clip" />
+                      </div>
+                    </div>
+
+                    {/* OXXO Config */}
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>OXXO Pay</Label>
+                        <div className="text-xs text-muted-foreground">Pagos en efectivo en tiendas</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" data-testid="btn-config-oxxo">
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Configuración OXXO Pay</DialogTitle>
+                              <DialogDescription>Datos para generar las referencias de pago.</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label>Nombre del Beneficiario</Label>
+                                <Input placeholder="RevenTicket S.A. de C.V." data-testid="input-oxxo-beneficiary" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Número de Cuenta / Referencia Base</Label>
+                                <Input placeholder="0000-0000-0000" data-testid="input-oxxo-account" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Días de vigencia</Label>
+                                <Input type="number" defaultValue="2" data-testid="input-oxxo-days" />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button onClick={handleSaveConfig} data-testid="btn-save-oxxo">Guardar</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Switch defaultChecked data-testid="switch-oxxo" />
+                      </div>
+                    </div>
+
+                    {/* SPEI Config */}
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Transferencia SPEI</Label>
+                        <div className="text-xs text-muted-foreground">Clabe interbancaria única</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                         <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" data-testid="btn-config-spei">
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Configuración SPEI</DialogTitle>
+                              <DialogDescription>Datos de la cuenta receptora.</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label>Banco</Label>
+                                <Input placeholder="BBVA / Santander / STP" data-testid="input-spei-bank" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>CLABE Interbancaria</Label>
+                                <Input placeholder="012 180 0000000000 0" data-testid="input-spei-clabe" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Titular de la cuenta</Label>
+                                <Input placeholder="RevenTicket S.A. de C.V." data-testid="input-spei-titular" />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button onClick={handleSaveConfig} data-testid="btn-save-spei">Guardar</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Switch data-testid="switch-spei" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Fees & Discounts */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Percent className="h-5 w-5" />
+                      Comisiones y Descuentos
+                    </CardTitle>
+                    <CardDescription>Configura los cargos por servicio</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Fee Comprador (%)</Label>
+                      <div className="flex gap-2">
+                        <Input type="number" defaultValue="15" className="w-24" data-testid="input-buyer-fee" />
+                        <span className="flex items-center text-sm text-muted-foreground">%</span>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-muted/20 rounded-md text-sm text-muted-foreground">
+                       Solo el administrador puede vender boletos actualmente.
+                    </div>
+                    <Button className="w-full mt-4" onClick={handleSaveConfig} data-testid="btn-save-fees">
+                      <Save className="h-4 w-4 mr-2" />
+                      Guardar Cambios
+                    </Button>
+                  </CardContent>
+                </Card>
+                
+                {/* Mapas de Recintos */}
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <MapIcon className="h-5 w-5" />
+                      Mapas de Recintos
+                    </CardTitle>
+                    <CardDescription>Gestiona los SVGs y zonas de los estadios</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {venues.map((venue) => (
+                        <div key={venue.id} className="border rounded-lg p-4" data-testid={`venue-card-${venue.id}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium">{venue.name}</h4>
+                            <Badge variant="outline">{venue.city}</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Capacidad: {venue.capacity?.toLocaleString() || "N/A"}
+                          </p>
+                          <Button variant="outline" size="sm" className="w-full" data-testid={`btn-edit-venue-${venue.id}`}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar Mapa
+                          </Button>
+                        </div>
+                      ))}
+                      {venues.length === 0 && (
+                        <div className="md:col-span-2 border border-dashed p-8 rounded-lg text-center">
+                          <p className="text-muted-foreground mb-4">No hay recintos registrados.</p>
+                          <Button variant="outline" data-testid="btn-add-venue">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Agregar Recinto
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+function KpiCard({ title, value, sub, icon: Icon }: { title: string; value: string; sub: string; icon: any }) {
+  return (
+    <Card data-testid={`kpi-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between space-y-0 pb-2">
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="text-2xl font-bold">{value}</div>
+        <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function WhatsAppTab() {
+  const { data: status, isLoading } = useWhatsAppStatus();
+  
+  return (
+    <TabsContent value="whatsapp" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+      <h2 className="text-xl font-bold">Bot de WhatsApp</h2>
+      
+      <div className="grid md:grid-cols-2 gap-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              Estado de Conexión
+            </CardTitle>
+            <CardDescription>Conecta tu cuenta de WhatsApp para enviar notificaciones automáticas</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Verificando estado...</span>
+              </div>
+            ) : status?.connected ? (
+              <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
                 <div>
-                  <div style={{ fontSize:15,fontWeight:700 }}>WhatsApp Bot — {wa?.isReady ? "Activo ✓" : wa?.enabled ? "Conectando..." : "Deshabilitado"}</div>
-                  <div style={{ fontSize:12,color:"#666",marginTop:2 }}>{wa?.enabled ? "Mensajes OTP, confirmaciones y marketing activos" : "Activa WHATSAPP_ENABLED=true en las variables de entorno"}</div>
+                  <p className="font-bold text-green-700">WhatsApp Conectado</p>
+                  <p className="text-sm text-green-600">El bot está listo para enviar mensajes</p>
                 </div>
               </div>
-            </div>
-
-            {wa?.qrCode && (
-              <div style={{ background:"#fff",borderRadius:14,padding:20,textAlign:"center",marginBottom:12 }}>
-                <div style={{ fontSize:13,color:"#000",marginBottom:8,fontWeight:600 }}>Escanea este QR en WhatsApp Web</div>
-                <div style={{ fontSize:11,color:"#666",wordBreak:"break-all" }}>{wa.qrCode}</div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <XCircle className="h-8 w-8 text-yellow-600" />
+                  <div>
+                    <p className="font-bold text-yellow-700">WhatsApp Desconectado</p>
+                    <p className="text-sm text-yellow-600">Escanea el código QR para conectar</p>
+                  </div>
+                </div>
+                
+                {status?.qrCode && (
+                  <div className="mt-4 p-4 bg-white border rounded-lg">
+                    <p className="text-sm font-medium mb-3 text-center">Escanea este código QR con WhatsApp:</p>
+                    <div className="flex justify-center">
+                      <QRCodeSVG 
+                        value={status.qrCode}
+                        size={200}
+                        level="M"
+                        data-testid="whatsapp-qr"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3 text-center">
+                      Abre WhatsApp en tu teléfono → Dispositivos vinculados → Vincular dispositivo
+                    </p>
+                  </div>
+                )}
+                
+                {!status?.qrCode && (
+                  <p className="text-sm text-muted-foreground">
+                    Espera unos segundos para que se genere el código QR...
+                  </p>
+                )}
               </div>
             )}
+          </CardContent>
+        </Card>
 
-            <div style={{ background:"#151515",border:"1px solid #222",borderRadius:14,padding:16 }}>
-              <div style={{ fontSize:14,fontWeight:700,marginBottom:12 }}>Mensajes automáticos configurados</div>
-              {[
-                "✅ OTP de verificación al iniciar sesión",
-                "🎉 Confirmación de compra con detalles del boleto",
-                "💳 Instrucciones de pago (SPEI / OXXO)",
-                "⏰ Recordatorio de pago pendiente (1h, 6h, 12h)",
-                "👋 Carrito abandonado (24h después)",
-                "🎟️ Entrega digital del boleto",
-                "📢 Mensajes de marketing (nuevos eventos)",
-              ].map(m => (
-                <div key={m} style={{ display:"flex",alignItems:"center",gap:8,fontSize:13,color:"#aaa",marginBottom:8 }}>
-                  <span style={{ color:"#3ddc84",flexShrink:0 }}>✓</span>{m}
-                </div>
-              ))}
+        <Card>
+          <CardHeader>
+            <CardTitle>Notificaciones Automáticas</CardTitle>
+            <CardDescription>El bot enviará estos mensajes automáticamente</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-medium text-sm">Verificación OTP</p>
+                <p className="text-xs text-muted-foreground">Código de 6 dígitos antes de pagar</p>
+              </div>
             </div>
-          </>
-        )}
-
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-medium text-sm">Confirmación de Pedido</p>
+                <p className="text-xs text-muted-foreground">Detalles del evento y boletos</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-medium text-sm">Pago Confirmado</p>
+                <p className="text-xs text-muted-foreground">Cuando la pasarela confirma el pago</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-medium text-sm">Instrucciones de Pago</p>
+                <p className="text-xs text-muted-foreground">Para pagos OXXO o Transferencia</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-medium text-sm">Recordatorios de Pago</p>
+                <p className="text-xs text-muted-foreground">A las 1, 6 y 12 horas de crear el pedido</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-medium text-sm">Carrito Abandonado</p>
+                <p className="text-xs text-muted-foreground">Recordatorio 30 minutos después</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </TabsContent>
   );
 }

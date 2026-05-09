@@ -1,134 +1,478 @@
-import { useParams, useLocation } from "wouter";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { Layout } from "@/components/layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
+import { CreditCard, Banknote, Store, ShieldCheck, Clock, Check, Phone, Loader2, Shield, Info } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useEvent, useVenue, useTicket, apiRequest } from "@/lib/api";
 
 export default function Checkout() {
-  const { ticketId } = useParams<{ ticketId: string }>();
-  const [, navigate] = useLocation();
-  const [name, setName] = useState(""); const [surname, setSurname] = useState("");
-  const [email, setEmail] = useState(""); const [phone, setPhone] = useState("");
-  const [payMethod, setPayMethod] = useState("card");
-  const [cardNum, setCardNum] = useState(""); const [expiry, setExpiry] = useState(""); const [cvc, setCvc] = useState("");
-  const [insure, setInsure] = useState(false);
-  const base = 2850; const fee = 427; const ins = 513;
-  const total = base + fee + (insure ? ins : 0);
+  const [location, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "spei" | "oxxo">("card");
 
-  const inp: React.CSSProperties = { background:"#111",border:"1px solid #282828",borderRadius:10,padding:"10px 12px",color:"#fff",fontSize:14,fontFamily:"Inter,sans-serif",outline:"none",width:"100%" };
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [includeCancellationInsurance, setIncludeCancellationInsurance] = useState(false);
 
-  const submitOrder = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/orders", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ ticketId, phone:`52${phone}`, paymentMethod:payMethod, totalAmount:total, fees:fee+Number(insure?ins:0) }),
+  const urlParams = new URLSearchParams(window.location.search);
+  const ticketId = urlParams.get("ticketId") || "";
+  const eventId = urlParams.get("eventId") || "";
+  
+  const { data: event } = useEvent(eventId);
+  const { data: venue } = useVenue(event?.venueId || "");
+  const { data: ticket } = useTicket(ticketId);
+  
+  const zoneName = ticket?.section || "General";
+  const ticketPrice = ticket ? parseFloat(ticket.price) : 0;
+  const fees = ticketPrice * 0.15;
+  const insuranceCost = includeCancellationInsurance ? ticketPrice * 0.18 : 0;
+  const total = ticketPrice + fees + insuranceCost;
+
+  const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  useEffect(() => {
+    if (ticketId && eventId && phone) {
+      apiRequest("POST", "/api/cart", {
+        sessionId,
+        ticketId,
+        eventId,
+        phone: phone.length >= 10 ? phone : undefined
+      }).catch(() => {});
+    }
+  }, [ticketId, eventId, phone]);
+
+  const formatPhone = (value: string) => {
+    const cleaned = value.replace(/\D/g, "");
+    return cleaned.slice(0, 10);
+  };
+
+  const handleSendOtp = async () => {
+    if (phone.length !== 10) {
+      toast({ title: "Error", description: "Ingresa un número de 10 dígitos", variant: "destructive" });
+      return;
+    }
+
+    setSendingOtp(true);
+    try {
+      const response = await apiRequest("POST", "/api/otp/send", { phone: `52${phone}` });
+      if (response.success) {
+        setOtpSent(true);
+        toast({ title: "Código enviado", description: "Revisa tu WhatsApp para ver el código" });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "No se pudo enviar el código", variant: "destructive" });
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      toast({ title: "Error", description: "Ingresa el código de 6 dígitos", variant: "destructive" });
+      return;
+    }
+
+    setVerifyingOtp(true);
+    try {
+      const response = await apiRequest("POST", "/api/otp/verify", { phone: `52${phone}`, code: otpCode });
+      if (response.verified) {
+        setOtpVerified(true);
+        toast({ title: "Verificado", description: "Tu número ha sido verificado correctamente" });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Código inválido", variant: "destructive" });
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  const canContinueToPayment = firstName && lastName && email && phone.length === 10 && otpVerified;
+
+  const handlePayment = async () => {
+    setLoading(true);
+    try {
+      const response = await apiRequest("POST", "/api/orders/complete", {
+        ticketId,
+        eventId,
+        totalAmount: total.toFixed(2),
+        fees: fees.toFixed(2),
+        paymentMethod,
+        phone: `52${phone}`
       });
-      if (!res.ok) throw new Error("Error");
-      return res.json();
-    },
-    onSuccess: () => { toast.success("¡Compra exitosa! Revisa tu WhatsApp."); navigate("/wallet"); },
-    onError: () => { toast.success("¡Compra completada! (demo)"); navigate("/wallet"); },
-  });
+
+      if (response.id) {
+        setStep(3);
+        toast({
+          title: paymentMethod === "card" ? "¡Compra exitosa!" : "¡Orden creada!",
+          description: paymentMethod === "card" 
+            ? "Tus boletos han sido enviados a tu correo y WhatsApp."
+            : "Revisa tu WhatsApp para las instrucciones de pago.",
+        });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Error al procesar el pago", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!event || !ticket) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (step === 3) {
+    return (
+      <Layout>
+        <div className="min-h-[70vh] flex flex-col items-center justify-center p-4 text-center">
+          <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-500">
+            <Check className="h-12 w-12" />
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-heading font-bold mb-2">
+            {paymentMethod === "card" ? "¡Gracias por tu compra!" : "¡Orden creada!"}
+          </h1>
+          <p className="text-muted-foreground text-lg mb-4 max-w-md">
+            {paymentMethod === "card" 
+              ? "Tu pago ha sido procesado. Revisa tu WhatsApp para los detalles."
+              : "Revisa tu WhatsApp para las instrucciones de pago."}
+          </p>
+          {paymentMethod !== "card" && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 max-w-md">
+              <p className="text-yellow-800 text-sm">
+                Tienes 24 horas para completar el pago. Te enviaremos recordatorios por WhatsApp.
+              </p>
+            </div>
+          )}
+          <div className="flex gap-4">
+            <Button variant="outline" onClick={() => setLocation("/")}>Volver al inicio</Button>
+            <Button onClick={() => setLocation("/profile")}>Ver mis boletos</Button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
-    <div style={{ animation:"fadein .25s ease" }}>
-      <div onClick={() => navigate(-1 as any)} style={{ display:"flex",alignItems:"center",gap:6,padding:"14px 16px 0",color:"#aaa",cursor:"pointer",fontSize:14 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-        Finalizar compra
+    <Layout>
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-2xl sm:text-3xl font-heading font-bold mb-6">Finalizar Compra</h1>
+        
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            
+            <Card className={step > 1 ? "opacity-60 pointer-events-none" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm">1</span>
+                  Datos del Comprador
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nombre</Label>
+                    <Input 
+                      placeholder="Tu nombre" 
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      data-testid="input-firstname"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellido</Label>
+                    <Input 
+                      placeholder="Tu apellido" 
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      data-testid="input-lastname"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input 
+                    type="email" 
+                    placeholder="correo@ejemplo.com" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    data-testid="input-email"
+                  />
+                  <p className="text-xs text-muted-foreground">Aquí recibirás tus boletos.</p>
+                </div>
+
+                <Separator className="my-4" />
+
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Phone className="h-4 w-4" />
+                    WhatsApp (para verificación y notificaciones)
+                  </Label>
+                  <div className="flex gap-2">
+                    <div className="flex items-center bg-muted px-3 rounded-l-md border border-r-0">
+                      <span className="text-sm text-muted-foreground">+52</span>
+                    </div>
+                    <Input 
+                      type="tel"
+                      placeholder="10 dígitos" 
+                      value={phone}
+                      onChange={(e) => setPhone(formatPhone(e.target.value))}
+                      className="rounded-l-none"
+                      disabled={otpVerified}
+                      data-testid="input-phone"
+                    />
+                    {!otpSent && !otpVerified && (
+                      <Button 
+                        type="button"
+                        variant="secondary"
+                        onClick={handleSendOtp}
+                        disabled={phone.length !== 10 || sendingOtp}
+                        data-testid="btn-send-otp"
+                      >
+                        {sendingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar código"}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {otpSent && !otpVerified && (
+                    <div className="flex gap-2 mt-2">
+                      <Input 
+                        type="text"
+                        placeholder="Código de 6 dígitos" 
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        maxLength={6}
+                        data-testid="input-otp"
+                      />
+                      <Button 
+                        type="button"
+                        onClick={handleVerifyOtp}
+                        disabled={otpCode.length !== 6 || verifyingOtp}
+                        data-testid="btn-verify-otp"
+                      >
+                        {verifyingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verificar"}
+                      </Button>
+                    </div>
+                  )}
+
+                  {otpVerified && (
+                    <div className="flex items-center gap-2 text-green-600 text-sm">
+                      <Check className="h-4 w-4" />
+                      Número verificado correctamente
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Te enviaremos un código de verificación y las notificaciones de tu pedido por WhatsApp.
+                  </p>
+                </div>
+
+                {step === 1 && (
+                  <Button 
+                    className="w-full mt-4" 
+                    onClick={() => setStep(2)}
+                    disabled={!canContinueToPayment}
+                    data-testid="btn-continue-payment"
+                  >
+                    Continuar al Pago
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className={step === 1 ? "opacity-60 pointer-events-none" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm">2</span>
+                  Método de Pago
+                </CardTitle>
+                <CardDescription>Todas las transacciones son seguras y encriptadas.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as any)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3 h-14">
+                    <TabsTrigger value="card" className="flex flex-col gap-1 py-2" data-testid="tab-card">
+                      <CreditCard className="h-4 w-4" />
+                      <span className="text-xs">Tarjeta</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="spei" className="flex flex-col gap-1 py-2" data-testid="tab-spei">
+                      <Banknote className="h-4 w-4" />
+                      <span className="text-xs">Transferencia</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="oxxo" className="flex flex-col gap-1 py-2" data-testid="tab-oxxo">
+                      <Store className="h-4 w-4" />
+                      <span className="text-xs">OXXO Pay</span>
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <div className="mt-6">
+                    <TabsContent value="card" className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Número de Tarjeta</Label>
+                        <Input placeholder="0000 0000 0000 0000" data-testid="input-card-number" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Expira</Label>
+                          <Input placeholder="MM/AA" data-testid="input-card-expiry" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CVC</Label>
+                          <Input placeholder="123" data-testid="input-card-cvc" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                        <ShieldCheck className="h-4 w-4 text-green-600" />
+                        Pagos procesados de forma segura.
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="spei" className="text-center py-4 space-y-4">
+                      <p>Recibirás los datos bancarios (CLABE) por WhatsApp al confirmar tu orden.</p>
+                      <div className="bg-yellow-50 text-yellow-800 p-3 rounded-md text-sm">
+                        Tienes 24 horas para realizar la transferencia. Te enviaremos recordatorios.
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="oxxo" className="text-center py-4 space-y-4">
+                      <p>Recibirás la referencia de pago por WhatsApp para pagar en cualquier OXXO.</p>
+                      <div className="bg-yellow-50 text-yellow-800 p-3 rounded-md text-sm">
+                        Tienes 24 horas para realizar el pago. Te enviaremos recordatorios.
+                      </div>
+                    </TabsContent>
+                  </div>
+                </Tabs>
+
+                <div className="mt-8">
+                  <Button 
+                    className="w-full h-12 text-lg font-bold" 
+                    onClick={handlePayment} 
+                    disabled={step === 1 || loading}
+                    data-testid="btn-pay"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Procesando...
+                      </>
+                    ) : paymentMethod === "card" ? (
+                      `Pagar $${total.toLocaleString("es-MX")}`
+                    ) : (
+                      `Crear Orden - $${total.toLocaleString("es-MX")}`
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+          </div>
+
+          <div className="lg:col-span-1">
+            <div className="sticky top-24 space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Resumen de Orden</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-3">
+                    <img src={event.image || "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=200"} className="w-16 h-16 object-cover rounded" />
+                    <div>
+                      <div className="font-bold text-sm line-clamp-2">{event.title}</div>
+                      <div className="text-xs text-muted-foreground">{venue?.name || "Venue"}</div>
+                    </div>
+                  </div>
+                  <Separator />
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Boletos (1x)</span>
+                      <span>${ticketPrice.toLocaleString("es-MX")}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Zona</span>
+                      <span>{zoneName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Asientos</span>
+                      <span>Fila {ticket.row}, Asiento {ticket.seat}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Cargos de servicio</span>
+                      <span>${fees.toLocaleString("es-MX")}</span>
+                    </div>
+                    {includeCancellationInsurance && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Seguro de cancelación</span>
+                        <span>${insuranceCost.toLocaleString("es-MX")}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* Cancellation Insurance Option */}
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox 
+                        id="insurance"
+                        checked={includeCancellationInsurance}
+                        onCheckedChange={(checked) => setIncludeCancellationInsurance(checked === true)}
+                        data-testid="checkbox-insurance"
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="insurance" className="flex items-center gap-2 font-medium text-sm cursor-pointer">
+                          <Shield className="h-4 w-4 text-green-600" />
+                          Seguro de Cancelación
+                        </label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Cancela hasta 72h antes del evento. 18% del valor del boleto (${(ticketPrice * 0.18).toLocaleString("es-MX")})
+                        </p>
+                        <div className="flex items-start gap-1 mt-2 text-xs text-muted-foreground">
+                          <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                          <span>El seguro no es reembolsable. Al cancelar se retiene 20% adicional.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between font-bold text-lg">
+                    <span>Total</span>
+                    <span className="text-primary">${total.toLocaleString("es-MX")}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <div className="flex items-start gap-2 text-xs text-muted-foreground p-2">
+                <Clock className="h-4 w-4 shrink-0" />
+                <p>Los boletos están reservados por 10:00 minutos. Completa tu compra antes de que sean liberados.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div style={{ padding:"0 16px 16px" }}>
-        <h1 style={{ fontSize:20,fontWeight:800,margin:"12px 0 14px" }}>Tu orden</h1>
-
-        {/* Event summary */}
-        <div style={{ display:"flex",gap:12,background:"#151515",border:"1px solid #222",borderRadius:14,padding:12,marginBottom:12,alignItems:"center" }}>
-          <img src="https://picsum.photos/seed/concert1/200/200" alt="" style={{ width:52,height:52,objectFit:"cover",borderRadius:9,flexShrink:0 }}/>
-          <div>
-            <div style={{ fontSize:13,fontWeight:700,lineHeight:1.3 }}>Bad Bunny — El Último Tour</div>
-            <div style={{ fontSize:11,color:"#666",marginTop:2 }}>18 Jun 2026 · Foro Sol · Pista Fila 8</div>
-          </div>
-        </div>
-
-        {/* Buyer data */}
-        <div style={{ background:"#151515",border:"1px solid #222",borderRadius:14,padding:16,marginBottom:10 }}>
-          <h3 style={{ fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",gap:8 }}>
-            <span style={{ width:24,height:24,borderRadius:"50%",background:"#3ddc84",color:"#000",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>1</span>
-            Datos del comprador
-          </h3>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
-            <div><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Nombre</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre" style={inp}/></div>
-            <div><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Apellido</label><input value={surname} onChange={e=>setSurname(e.target.value)} placeholder="Apellido" style={inp}/></div>
-          </div>
-          <div style={{ marginBottom:8 }}><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Email</label><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="correo@ejemplo.com" style={inp}/></div>
-          <div><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>WhatsApp (verificación + entrega)</label>
-            <div style={{ display:"flex" }}>
-              <div style={{ ...inp, borderRight:"none", borderRadius:"10px 0 0 10px", color:"#888", whiteSpace:"nowrap", width:"auto" }}>🇲🇽 +52</div>
-              <input value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,"").slice(0,10))} type="tel" placeholder="10 dígitos" style={{ ...inp, borderLeft:"none", borderRadius:0, borderRight:"none" }}/>
-              <button style={{ background:"#3ddc84",border:"none",borderRadius:"0 10px 10px 0",padding:"0 14px",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>Verificar</button>
-            </div>
-          </div>
-        </div>
-
-        {/* Payment */}
-        <div style={{ background:"#151515",border:"1px solid #222",borderRadius:14,padding:16,marginBottom:10 }}>
-          <h3 style={{ fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",gap:8 }}>
-            <span style={{ width:24,height:24,borderRadius:"50%",background:"#3ddc84",color:"#000",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>2</span>
-            Método de pago
-          </h3>
-          <div style={{ display:"flex",gap:6,marginBottom:12 }}>
-            {[{id:"card",label:"Tarjeta"},{id:"spei",label:"SPEI"},{id:"oxxo",label:"OXXO"}].map(m => (
-              <div key={m.id} onClick={() => setPayMethod(m.id)}
-                style={{ flex:1,padding:"10px 6px",borderRadius:10,textAlign:"center",border:`1px solid ${payMethod===m.id?"#3ddc84":"#282828"}`,background:payMethod===m.id?"#0d1a12":"#111",cursor:"pointer",fontSize:12,fontWeight:600,color:payMethod===m.id?"#3ddc84":"#888" }}>
-                {m.label}
-              </div>
-            ))}
-          </div>
-          {payMethod === "card" && (
-            <>
-              <div style={{ marginBottom:8 }}><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Número de tarjeta</label><input value={cardNum} onChange={e=>setCardNum(e.target.value)} placeholder="0000 0000 0000 0000" style={inp}/></div>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-                <div><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>Expira</label><input value={expiry} onChange={e=>setExpiry(e.target.value)} placeholder="MM/AA" style={inp}/></div>
-                <div><label style={{ fontSize:11,color:"#666",display:"block",marginBottom:4 }}>CVC</label><input value={cvc} onChange={e=>setCvc(e.target.value)} placeholder="123" style={inp}/></div>
-              </div>
-            </>
-          )}
-          {payMethod === "spei" && <div style={{ background:"#0a1a0f",borderRadius:10,padding:12,fontSize:13,color:"#888",lineHeight:1.6 }}>CLABE: <strong style={{ color:"#fff" }}>646180123456789012</strong><br/>Banco: STP · Beneficiario: RevenTicket SA de CV<br/>Referencia: <strong style={{ color:"#3ddc84" }}>RT-{ticketId?.slice(0,6).toUpperCase()}</strong></div>}
-          {payMethod === "oxxo" && <div style={{ background:"#0a1a0f",borderRadius:10,padding:12,fontSize:13,color:"#888",lineHeight:1.6 }}>Referencia OXXO: <strong style={{ color:"#3ddc84" }}>RT-{ticketId?.slice(0,8).toUpperCase()}</strong><br/>Acude a cualquier OXXO y paga ${total.toLocaleString("es-MX")} MXN.</div>}
-        </div>
-
-        {/* Summary */}
-        <div style={{ background:"#151515",border:"1px solid #222",borderRadius:14,padding:16,marginBottom:10 }}>
-          <h3 style={{ fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",gap:8 }}>
-            <span style={{ width:24,height:24,borderRadius:"50%",background:"#3ddc84",color:"#000",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>3</span>
-            Resumen
-          </h3>
-          {[["Boleto (1x)","$2,850"],["Cargos de servicio","$427"]].map(([l,v]) => (
-            <div key={l} style={{ display:"flex",justifyContent:"space-between",fontSize:13,padding:"3px 0",color:"#888" }}>
-              <span>{l}</span><span style={{ color:"#ccc" }}>{v}</span>
-            </div>
-          ))}
-          {/* Insurance */}
-          <div style={{ background:"#0a1a0f",border:"1px solid #1a3522",borderRadius:12,padding:12,margin:"8px 0" }}>
-            <div style={{ display:"flex",alignItems:"flex-start",gap:8 }}>
-              <input type="checkbox" checked={insure} onChange={e=>setInsure(e.target.checked)} style={{ width:18,height:18,accentColor:"#3ddc84",marginTop:1,cursor:"pointer",flexShrink:0 }}/>
-              <div>
-                <div style={{ fontSize:13,fontWeight:700,marginBottom:2 }}>🛡️ Seguro de cancelación</div>
-                <div style={{ fontSize:11,color:"#666",lineHeight:1.4 }}>Cancela hasta 72h antes. Costo: $513. No reembolsable.</div>
-              </div>
-            </div>
-          </div>
-          <div style={{ height:1,background:"#222",margin:"10px 0" }}/>
-          <div style={{ display:"flex",justifyContent:"space-between",fontSize:16,fontWeight:800 }}>
-            <span>Total</span><span style={{ color:"#3ddc84" }}>${total.toLocaleString("es-MX")}</span>
-          </div>
-          <div style={{ fontSize:11,color:"#444",marginTop:8,display:"flex",alignItems:"center",gap:5 }}>
-            ⏱ Reservado por <strong style={{ color:"#666" }}>10:00 min</strong>
-          </div>
-        </div>
-
-        <button onClick={() => submitOrder.mutate()} disabled={submitOrder.isPending}
-          style={{ width:"100%",padding:16,borderRadius:14,background:"#3ddc84",color:"#000",fontSize:16,fontWeight:800,border:"none",cursor:"pointer",boxShadow:"0 4px 20px rgba(61,220,132,.25)" }}>
-          {submitOrder.isPending ? "Procesando..." : `Pagar $${total.toLocaleString("es-MX")} →`}
-        </button>
-      </div>
-    </div>
+    </Layout>
   );
 }
