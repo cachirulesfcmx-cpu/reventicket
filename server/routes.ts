@@ -70,7 +70,7 @@ export async function registerRoutes(
 
   // CSRF middleware - apply after session
   app.use(csrfMiddleware());
-  app.use("/api", validateCSRF);
+  app.use("/api", (req, res, next) => { if (req.path === "/auth/login" || req.path === "/csrf" || req.path === "/auth/logout") return next(); return validateCSRF(req, res, next); });
   
   // Enterprise routes (analytics, risk, wallet, resale)
   app.use("/api/enterprise", enterpriseRoutes);
