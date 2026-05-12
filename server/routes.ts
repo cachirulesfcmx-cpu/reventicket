@@ -26,6 +26,9 @@ import { createPassesForOrder } from "./lib/wallet";
 import { trackEvent } from "./lib/analytics";
 import { isFeatureEnabled } from "./lib/feature-flags";
 
+import { paymentsRouter } from "./routes/payments";
+
+
 declare module "express-session" {
   interface SessionData {
     userId: string;
@@ -70,7 +73,7 @@ export async function registerRoutes(
 
   // CSRF middleware - apply after session
   app.use(csrfMiddleware());
-  app.use("/api", (req, res, next) => { if (req.path === "/auth/login" || req.path === "/csrf" || req.path === "/auth/logout") return next(); return validateCSRF(req, res, next); });
+  app.use("/api", validateCSRF);
   
   // Enterprise routes (analytics, risk, wallet, resale)
   app.use("/api/enterprise", enterpriseRoutes);
@@ -1367,6 +1370,22 @@ export async function registerRoutes(
   } else {
     console.log("Jobs de fondo deshabilitados (JOBS_ENABLED !== 'true')");
   }
+
+  
+  app.use("/api/payments", paymentsRouter);
+
+  
+  // Toggle featured status
+  app.patch("/api/events/:id/featured", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isFeatured } = req.body;
+      await db.update(events).set({ isFeatured: Boolean(isFeatured) }).where(eq(events.id, id));
+      res.json({ success: true, isFeatured: Boolean(isFeatured) });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   return httpServer;
 }

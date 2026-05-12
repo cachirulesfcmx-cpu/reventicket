@@ -50,6 +50,7 @@ export const events = pgTable("events", {
   image: text("image"),
   minPrice: decimal("min_price", { precision: 10, scale: 2 }),
   tags: json("tags").$type<string[]>().default([]),
+  isFeatured: boolean("is_featured").notNull().default(false),
   description: text("description"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
