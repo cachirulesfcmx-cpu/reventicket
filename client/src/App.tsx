@@ -38,6 +38,7 @@ const Sell = lazy(() => import("@/pages/sell"));
 const Payments = lazy(() => import("@/pages/payments"));
 const MapViewer = lazy(() => import("@/pages/map-viewer"));
 const Wallet = lazy(() => import("@/pages/wallet"));
+const AdminSettings = lazy(() => import("@/pages/admin-settings"));
 const Scanner = lazy(() => import("@/pages/scanner"));
 const AnalyticsDashboard = lazy(() => import("@/pages/analytics-dashboard"));
 
@@ -105,6 +106,7 @@ function Router() {
         <Route path="/checkout" component={Checkout} />
         <Route path="/profile" component={Profile} />
         <Route path="/portal-admin/dashboard" component={ProtectedAdmin} />
+              <Route path="/portal-admin/settings" component={AdminSettings} />
         <Route path="/category/:cat" component={Home} />
         <Route path="/about" component={About} />
         <Route path="/help" component={HelpCenter} />
