@@ -1,56 +1,51 @@
 import { useEffect, useState } from "react";
-import { useLocation, Redirect } from "wouter";
+import { Redirect } from "wouter";
 import { Loader2 } from "lucide-react";
 
 interface AdminRouteProps {
   children: React.ReactNode;
 }
 
-interface User {
-  id: string;
-  email: string;
-  role: string;
-  firstName?: string;
-  lastName?: string;
-}
-
 export function AdminRoute({ children }: AdminRouteProps) {
-  const [_, setLocation] = useLocation();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    checkAdminAccess();
-  }, []);
-
-  const checkAdminAccess = async () => {
-    try {
-      const res = await fetch("/api/auth/me", {
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        setIsAdmin(false);
-        return;
-      }
-
-      const user: User = await res.json();
-      setIsAdmin(user.role === "admin");
-    } catch (error) {
-      console.error("Error checking admin access:", error);
-      setIsAdmin(false);
-    } finally {
-      setLoading(false);
+    // Check localStorage first (fast, no network)
+    const stored = localStorage.getItem("admin_logged_in");
+    const user = localStorage.getItem("admin_user");
+    
+    if (stored === "true" && user) {
+      try {
+        const parsed = JSON.parse(user);
+        if (parsed.role === "admin") {
+          setIsAdmin(true);
+          setLoading(false);
+          return;
+        }
+      } catch {}
     }
-  };
+
+    // Fallback: verify with server
+    fetch("https://reventicket-production.up.railway.app/api/auth/me", {
+      credentials: "include",
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(user => {
+        if (user?.role === "admin") {
+          localStorage.setItem("admin_logged_in", "true");
+          localStorage.setItem("admin_user", JSON.stringify(user));
+          setIsAdmin(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-neutral-400">Verificando acceso...</p>
-        </div>
+      <div style={{ minHeight: "100vh", background: "#0d0d0d", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 style={{ width: 32, height: 32, color: "#22c55e", animation: "spin 1s linear infinite" }} />
       </div>
     );
   }

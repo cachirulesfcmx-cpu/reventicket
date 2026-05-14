@@ -1,129 +1,145 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
-import { ShieldAlert, Loader2 } from "lucide-react";
-import { fetchWithCSRF } from "@/lib/csrf";
 
 export default function AdminLogin() {
-  const [_, setLocation] = useLocation();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState("");
+  const [, setLocation] = useLocation();
+  const [email, setEmail] = useState("admin@reventicket.com");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
 
     try {
-      // Real login against backend (auth endpoints are exempt from CSRF)
-      const loginRes = await fetchWithCSRF("/api/auth/login", {
+      const res = await fetch("https://reventicket-production.up.railway.app/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
-      });
-
-      if (!loginRes.ok) {
-        const error = await loginRes.json();
-        throw new Error(error.error || "Credenciales inválidas");
-      }
-
-      // Verify user is admin
-      const meRes = await fetch("/api/auth/me", {
         credentials: "include",
       });
 
-      if (!meRes.ok) {
-        throw new Error("Error al verificar sesión");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Credenciales inválidas");
       }
 
-      const user = await meRes.json();
-
-      if (user.role !== "admin") {
-        // Logout if not admin
-        await fetchWithCSRF("/api/auth/logout", {
-          method: "POST",
-        });
-        throw new Error("Acceso denegado. Solo administradores pueden acceder.");
+      if (data.role !== "admin") {
+        throw new Error("No tienes permisos de administrador");
       }
 
-      toast({
-        title: "Acceso Concedido",
-        description: `Bienvenido, ${user.firstName || "Administrador"}.`,
-      });
+      // Store session info in localStorage
+      localStorage.setItem("admin_user", JSON.stringify(data));
+      localStorage.setItem("admin_logged_in", "true");
+
       setLocation("/portal-admin/dashboard");
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Acceso Denegado",
-        description: error.message || "Error al iniciar sesión",
-      });
+    } catch (err: any) {
+      setError(err.message || "Error al iniciar sesión");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-neutral-800 bg-neutral-900 text-white">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 bg-primary/20 text-primary rounded-full flex items-center justify-center mb-4">
-            <ShieldAlert className="w-6 h-6" />
+    <div style={{
+      minHeight: "100vh", background: "#0d0d0d", display: "flex",
+      alignItems: "center", justifyContent: "center",
+      fontFamily: "Inter, sans-serif", color: "#fff",
+    }}>
+      <div style={{ width: "100%", maxWidth: 420, padding: "0 24px" }}>
+        <div style={{
+          background: "#111", border: "1px solid #222", borderRadius: "20px",
+          padding: "40px 32px",
+        }}>
+          {/* Icon */}
+          <div style={{
+            width: 56, height: 56, borderRadius: "16px",
+            background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 20px",
+          }}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
           </div>
-          <CardTitle className="text-2xl font-heading font-bold">Admin Portal</CardTitle>
-          <CardDescription className="text-neutral-400">
+
+          <h1 style={{ fontSize: 22, fontWeight: 800, textAlign: "center", marginBottom: 6 }}>
+            Admin Portal
+          </h1>
+          <p style={{ fontSize: 13, color: "#666", textAlign: "center", marginBottom: 28 }}>
             Acceso restringido únicamente para personal autorizado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-neutral-300">Usuario Admin</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="correo@ejemplo.com" 
-                className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-600 focus:border-primary"
+          </p>
+
+          {error && (
+            <div style={{
+              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: 10, padding: "10px 14px", marginBottom: 16,
+              fontSize: 13, color: "#f87171", textAlign: "center",
+            }}>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Usuario Admin
+              </label>
+              <input
+                type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required 
-                data-testid="input-admin-email"
+                onChange={e => setEmail(e.target.value)}
+                required
+                style={{
+                  width: "100%", background: "#0a0a0a", border: "1px solid #282828",
+                  borderRadius: 10, padding: "11px 14px", color: "#fff",
+                  fontSize: 14, fontFamily: "Inter, sans-serif", outline: "none",
+                  boxSizing: "border-box",
+                }}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-neutral-300">Contraseña</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                className="bg-neutral-800 border-neutral-700 text-white focus:border-primary"
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Contraseña
+              </label>
+              <input
+                type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required 
-                data-testid="input-admin-password"
+                onChange={e => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                onKeyDown={e => e.key === "Enter" && handleLogin(e as any)}
+                style={{
+                  width: "100%", background: "#0a0a0a", border: "1px solid #282828",
+                  borderRadius: 10, padding: "11px 14px", color: "#fff",
+                  fontSize: 14, fontFamily: "Inter, sans-serif", outline: "none",
+                  boxSizing: "border-box",
+                }}
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full h-10 bg-primary hover:bg-primary/90 text-white" 
+
+            <button
+              type="submit"
               disabled={loading}
-              data-testid="button-admin-login"
+              style={{
+                width: "100%", padding: 14, borderRadius: 12,
+                background: loading ? "#1a4a2a" : "#22c55e",
+                color: loading ? "#4ade80" : "#000",
+                fontWeight: 800, fontSize: 15, border: "none",
+                cursor: loading ? "not-allowed" : "pointer",
+                boxShadow: "0 4px 20px rgba(34,197,94,0.25)",
+                transition: "all 0.2s",
+              }}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Verificando...
-                </>
-              ) : (
-                "Ingresar al Panel"
-              )}
-            </Button>
+              {loading ? "Verificando..." : "Ingresar al Panel"}
+            </button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
