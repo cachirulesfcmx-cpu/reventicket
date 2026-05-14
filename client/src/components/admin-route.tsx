@@ -27,7 +27,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
     }
 
     // Fallback: verify with server
-    fetch("https://reventicket-production.up.railway.app/api/auth/me", {
+    fetch("/api/auth/me", {
       credentials: "include",
     })
       .then(res => res.ok ? res.json() : null)
