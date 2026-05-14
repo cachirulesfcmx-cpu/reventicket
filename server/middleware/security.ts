@@ -35,7 +35,7 @@ export function setupSecurityMiddleware(app: Express) {
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100,
   message: { error: "Demasiados intentos. Por favor, espera 15 minutos." },
   standardHeaders: true,
   legacyHeaders: false,
