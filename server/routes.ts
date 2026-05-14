@@ -1206,11 +1206,14 @@ export async function registerRoutes(
   const MAX_TIMINGS = 1000;
 
   // Middleware to track API timings
-  // CSRF validation disabled for cross-origin compatibility
+  app.use("/api", (req, res, next) => {
+    const start = Date.now();
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      apiTimings.push({ route: `${req.method} ${req.path}`, duration, timestamp: Date.now() });
       if (apiTimings.length > MAX_TIMINGS) {
         apiTimings.shift();
       }
-      // Log slow queries
       if (duration > 500) {
         console.warn(`[SLOW] ${req.method} ${req.path}: ${duration}ms`);
       }
