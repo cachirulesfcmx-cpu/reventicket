@@ -96,13 +96,33 @@ export async function registerRoutes(
   };
 
   const requireAdmin = async (req: any, res: any, next: any) => {
-    if (!req.session.userId) {
+    // Intento 1: sesión por cookie
+    let userId = req.session?.userId;
+
+    // Intento 2: JWT en Authorization header
+    if (!userId) {
+      const authHeader = req.headers.authorization || "";
+      if (authHeader.startsWith("Bearer ")) {
+        const token = authHeader.slice(7);
+        try {
+          const jwt = require("jsonwebtoken");
+          const payload: any = jwt.verify(token, process.env.JWT_SECRET || process.env.SESSION_SECRET || "");
+          userId = payload.userId || payload.id || payload.sub;
+        } catch (e) {
+          // token invalido, continuar para devolver 401
+        }
+      }
+    }
+
+    if (!userId) {
       return res.status(401).json({ error: "No autorizado" });
     }
-    const user = await storage.getUser(req.session.userId);
+    const user = await storage.getUser(userId);
     if (!user || user.role !== "admin") {
       return res.status(403).json({ error: "Acceso denegado" });
     }
+    // Adjuntar user al request para uso posterior
+    req.user = user;
     next();
   };
 
