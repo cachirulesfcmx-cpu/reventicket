@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
+import { signToken, verifyToken, requireJWT, requireJWTAdmin } from "./lib/jwt-auth";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { insertUserSchema, insertEventSchema, insertZoneSchema, insertTicketSchema, insertOrderSchema } from "@shared/schema";
@@ -195,6 +196,49 @@ export async function registerRoutes(
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Error al registrar usuario" });
     }
+  });
+
+
+  // ── JWT Login (para admin panel - cross-domain compatible) ──────────────────
+  app.post("/api/auth/jwt-login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email y contraseña requeridos" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ error: "Credenciales inválidas" });
+      }
+
+      // Check env bypass first
+      const adminPass = process.env.ADMIN_PASSWORD;
+      let valid = false;
+      if (adminPass && user.role === "admin" && password === adminPass) {
+        valid = true;
+      } else {
+        valid = await bcrypt.compare(password, user.password);
+      }
+
+      if (!valid) {
+        return res.status(401).json({ error: "Credenciales inválidas" });
+      }
+
+      const token = signToken({ userId: user.id, email: user.email, role: user.role });
+
+      res.json({
+        token,
+        user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // JWT verify endpoint
+  app.get("/api/auth/jwt-me", requireJWT, (req, res) => {
+    res.json({ user: (req as any).jwtUser });
   });
 
   app.post("/api/auth/login", authLimiter, async (req, res) => {

@@ -1,56 +1,54 @@
 import { useEffect, useState } from "react";
 import { Redirect } from "wouter";
-import { Loader2 } from "lucide-react";
 
 interface AdminRouteProps {
   children: React.ReactNode;
 }
 
 export function AdminRoute({ children }: AdminRouteProps) {
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [status, setStatus] = useState<"loading" | "ok" | "denied">("loading");
 
   useEffect(() => {
-    // Check localStorage first (fast, no network)
-    const stored = localStorage.getItem("admin_logged_in");
+    const token = localStorage.getItem("admin_token");
     const user = localStorage.getItem("admin_user");
-    
-    if (stored === "true" && user) {
-      try {
-        const parsed = JSON.parse(user);
-        if (parsed.role === "admin") {
-          setIsAdmin(true);
-          setLoading(false);
-          return;
-        }
-      } catch {}
+
+    if (!token || !user) {
+      setStatus("denied");
+      return;
     }
 
-    // Fallback: verify with server
-    fetch("/api/auth/me", {
-      credentials: "include",
-    })
-      .then(res => res.ok ? res.json() : null)
-      .then(user => {
-        if (user?.role === "admin") {
-          localStorage.setItem("admin_logged_in", "true");
-          localStorage.setItem("admin_user", JSON.stringify(user));
-          setIsAdmin(true);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    try {
+      const parsed = JSON.parse(user);
+      if (parsed.role === "admin") {
+        // Verify token is not expired by checking with server
+        fetch("/api/auth/jwt-me", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then(r => {
+            if (r.ok) setStatus("ok");
+            else { localStorage.removeItem("admin_token"); localStorage.removeItem("admin_user"); setStatus("denied"); }
+          })
+          .catch(() => {
+            // If server unreachable but token exists, allow access
+            setStatus("ok");
+          });
+      } else {
+        setStatus("denied");
+      }
+    } catch {
+      setStatus("denied");
+    }
   }, []);
 
-  if (loading) {
+  if (status === "loading") {
     return (
-      <div style={{ minHeight: "100vh", background: "#0d0d0d", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Loader2 style={{ width: 32, height: 32, color: "#22c55e", animation: "spin 1s linear infinite" }} />
+      <div style={{ minHeight:"100vh", background:"#080808", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ color:"#22c55e", fontSize:14 }}>Verificando acceso...</div>
       </div>
     );
   }
 
-  if (!isAdmin) {
+  if (status === "denied") {
     return <Redirect to="/portal-admin/login" />;
   }
 
