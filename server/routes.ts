@@ -206,7 +206,16 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Credenciales inválidas" });
       }
 
-      const validPassword = await bcrypt.compare(password, user.password);
+      // Admin bypass: check env var first (for admin account only)
+      const adminPass = process.env.ADMIN_PASSWORD;
+      let validPassword = false;
+      
+      if (adminPass && user.role === "admin" && password === adminPass) {
+        validPassword = true;
+      } else {
+        validPassword = await bcrypt.compare(password, user.password);
+      }
+      
       if (!validPassword) {
         return res.status(401).json({ error: "Credenciales inválidas" });
       }
