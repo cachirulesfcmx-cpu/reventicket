@@ -24,17 +24,6 @@ const ALLOWED_ORIGINS = [
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
 ].filter(Boolean) as string[];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return callback(null, true);
-    // In development, allow all
-    if (process.env.NODE_ENV !== "production") return callback(null, true);
-    callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-}));
 
 setupSecurityMiddleware(app);
 app.use(corsMiddleware);
