@@ -90,6 +90,10 @@ async function doFetch(
   if (token) {
     headers.set("x-csrf-token", token);
   }
+  const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  if (adminToken) {
+    headers.set("Authorization", `Bearer ${adminToken}`);
+  }
   
   if (!headers.get("Content-Type")) {
     headers.delete("Content-Type");
@@ -176,6 +180,10 @@ async function fetchWithIdempotencyKey(
   headers.set("Content-Type", "application/json");
   if (token) {
     headers.set("x-csrf-token", token);
+  }
+  const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  if (adminToken) {
+    headers.set("Authorization", `Bearer ${adminToken}`);
   }
   headers.set("Idempotency-Key", idempotencyKey);
 
