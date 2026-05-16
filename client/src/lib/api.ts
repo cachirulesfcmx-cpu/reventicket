@@ -65,7 +65,11 @@ export function useAuth() {
   return useQuery<User | null>({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
+      const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+      const res = await fetch("/api/auth/me", {
+        credentials: "include",
+        headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
+      });
       if (!res.ok) return null;
       return res.json();
     },
@@ -244,7 +248,11 @@ export function useOrders() {
   return useQuery<Order[]>({
     queryKey: ["/api/orders"],
     queryFn: async () => {
-      const res = await fetch("/api/orders", { credentials: "include" });
+      const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+      const res = await fetch("/api/orders", {
+        credentials: "include",
+        headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
+      });
       if (!res.ok) throw new Error("Error al cargar órdenes");
       return res.json();
     },
@@ -289,7 +297,11 @@ export function useWhatsAppStatus() {
   return useQuery<{ isReady: boolean; qrCode: string | null; connected: boolean }>({
     queryKey: ["/api/whatsapp/status"],
     queryFn: async () => {
-      const res = await fetch("/api/whatsapp/status", { credentials: "include" });
+      const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+      const res = await fetch("/api/whatsapp/status", {
+        credentials: "include",
+        headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
+      });
       if (!res.ok) throw new Error("Error al obtener estado de WhatsApp");
       return res.json();
     },
