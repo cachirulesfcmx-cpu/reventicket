@@ -88,8 +88,28 @@ export async function registerRoutes(
   });
 
   // Auth middleware
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.session.userId) {
+  const requireAuth = async (req: any, res: any, next: any) => {
+    // Intento 1: sesion por cookie
+    let userId = req.session?.userId;
+
+    // Intento 2: JWT en Authorization header
+    if (!userId) {
+      const authHeader = req.headers.authorization || "";
+      if (authHeader.startsWith("Bearer ")) {
+        const token = authHeader.slice(7);
+        try {
+          const jwt = require("jsonwebtoken");
+          const payload: any = jwt.verify(token, process.env.JWT_SECRET || process.env.SESSION_SECRET || "");
+          userId = payload.userId || payload.id || payload.sub;
+          // Adjuntar userId al session para que el resto del codigo lo encuentre
+          if (req.session) req.session.userId = userId;
+        } catch (e) {
+          // token invalido
+        }
+      }
+    }
+
+    if (!userId) {
       return res.status(401).json({ error: "No autorizado" });
     }
     next();
