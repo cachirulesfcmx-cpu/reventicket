@@ -1,3 +1,6 @@
+import { AdminMapsTab } from "@/components/admin-maps-tab";
+import { AdminDiscountsTab } from "@/components/admin-discounts-tab";
+import { NewEventModal } from "@/components/new-event-modal";
 import { Layout } from "@/components/layout";
 import { useEvents, useVenues, useOrders, useDeleteEvent, useWhatsAppStatus } from "@/lib/api";
 import { QRCodeSVG } from "qrcode.react";
@@ -58,6 +61,8 @@ export default function Admin() {
   const { data: venues = [] } = useVenues();
   const { data: orders = [] } = useOrders();
   const deleteEventMutation = useDeleteEvent();
+  const [newEventOpen, setNewEventOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("dashboard");
 
   const handleSaveConfig = () => {
     toast({
@@ -101,31 +106,31 @@ export default function Admin() {
           <div className="p-6">
             <h2 className="font-heading font-bold text-xl text-primary mb-6">Admin Panel</h2>
             <nav className="space-y-2">
-              <Button variant="secondary" className="w-full justify-start gap-2" data-testid="nav-dashboard">
+              <Button variant="secondary" className="w-full justify-start gap-2" data-testid="nav-dashboard" onClick={() => setActiveTab("dashboard")}>
                 <BarChart className="h-4 w-4" />
                 Dashboard
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-events">
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-events" onClick={() => setActiveTab("events")}>
                 <Ticket className="h-4 w-4" />
                 Eventos
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-users">
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-users" onClick={() => setActiveTab("users")}>
                 <Users className="h-4 w-4" />
                 Usuarios
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-sales">
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-sales" onClick={() => setActiveTab("sales")}>
                 <DollarSign className="h-4 w-4" />
                 Ventas
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-maps">
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-maps" onClick={() => setActiveTab("maps")}>
                 <MapIcon className="h-4 w-4" />
                 Mapas de Recintos
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-discounts">
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-discounts" onClick={() => setActiveTab("discounts")}>
                 <Percent className="h-4 w-4" />
                 Descuentos
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-config">
+              <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-config" onClick={() => setActiveTab("config")}>
                 <Settings className="h-4 w-4" />
                 Configuración
               </Button>
@@ -135,7 +140,7 @@ export default function Admin() {
 
         {/* Main Content */}
         <div className="flex-1 overflow-auto p-8 bg-muted/5">
-          <Tabs defaultValue="dashboard" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-3xl font-heading font-bold">Panel de Administración</h1>
               <TabsList>
@@ -145,6 +150,8 @@ export default function Admin() {
                 <TabsTrigger value="users" data-testid="tab-users">Usuarios</TabsTrigger>
                 <TabsTrigger value="whatsapp" data-testid="tab-whatsapp">WhatsApp</TabsTrigger>
                 <TabsTrigger value="config" data-testid="tab-config">Configuración</TabsTrigger>
+                <TabsTrigger value="maps" className="hidden" data-testid="tab-maps">Mapas</TabsTrigger>
+                <TabsTrigger value="discounts" className="hidden" data-testid="tab-discounts">Descuentos</TabsTrigger>
               </TabsList>
             </div>
 
@@ -247,7 +254,7 @@ export default function Admin() {
             <TabsContent value="events" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">Gestión de Eventos</h2>
-                <Button data-testid="btn-new-event">
+                <Button data-testid="btn-new-event" onClick={() => setNewEventOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nuevo Evento
                 </Button>
@@ -621,9 +628,18 @@ export default function Admin() {
 
               </div>
             </TabsContent>
+
+            <TabsContent value="maps" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+              <AdminMapsTab />
+            </TabsContent>
+
+            <TabsContent value="discounts" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+              <AdminDiscountsTab />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
+      <NewEventModal open={newEventOpen} onOpenChange={setNewEventOpen} />
     </Layout>
   );
 }
