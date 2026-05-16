@@ -49,11 +49,7 @@ class WhatsAppService {
       }),
       puppeteer: {
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (() => {
-          const { execSync } = require("child_process");
-          try { return execSync("which chromium || which chromium-browser || which google-chrome", { encoding: "utf8" }).trim(); } 
-          catch { return "/usr/bin/chromium"; }
-        })(),
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
