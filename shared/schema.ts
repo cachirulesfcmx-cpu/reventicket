@@ -415,3 +415,38 @@ export const insertResaleListingSchema = createInsertSchema(resaleListings).omit
 });
 export type InsertResaleListing = z.infer<typeof insertResaleListingSchema>;
 export type ResaleListing = typeof resaleListings.$inferSelect;
+
+// ─── DISCOUNT CODES ───────────────────────────────────────────────────────────
+export const discountCodes = pgTable("discount_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull().unique(),
+  description: text("description"),
+  type: text("type").notNull().default("percent"),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(),
+  minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }),
+  maxUses: integer("max_uses"),
+  usedCount: integer("used_count").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDiscountCodeSchema = createInsertSchema(discountCodes).omit({ id: true, usedCount: true, createdAt: true });
+export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
+export type DiscountCode = typeof discountCodes.$inferSelect;
+
+// ─── EVENT MAPS ───────────────────────────────────────────────────────────────
+export const eventMaps = pgTable("event_maps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  svgData: text("svg_data"),
+  imageUrl: text("image_url"),
+  sections: json("sections").$type<Array<{ id: string; name: string; color: string; price: number; capacity: number }>>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertEventMapSchema = createInsertSchema(eventMaps).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEventMap = z.infer<typeof insertEventMapSchema>;
+export type EventMap = typeof eventMaps.$inferSelect;

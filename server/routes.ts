@@ -11,6 +11,9 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { authLimiter, otpLimiter, checkoutLimiter } from "./middleware/security";
 import { pool } from "./db";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
+import { discountCodes, eventMaps } from "@shared/schema";
 import { cache, CacheKeys, CacheTTL, invalidateEventCache, invalidateTicketCache } from "./lib/cache";
 import { generateEventSlug, generateEventJsonLd, generateSitemapXml, generateEventMetadata } from "./lib/seo";
 import { calculateFees, DEFAULT_FEE_CONFIG } from "./lib/fees";
@@ -1465,6 +1468,116 @@ export async function registerRoutes(
   }
 
   
+
+  // ─── DISCOUNT CODES ───────────────────────────────────────────────────────────
+
+  app.get("/api/discounts", requireAdmin, async (req, res) => {
+    try {
+      const codes = await db.select().from(discountCodes).orderBy(desc(discountCodes.createdAt));
+      res.json(codes);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/discounts", requireAdmin, async (req, res) => {
+    try {
+      const { code, description, type, value, minOrderAmount, maxUses, isActive, expiresAt } = req.body;
+      if (!code || !value || !type) return res.status(400).json({ error: "code, type y value son requeridos" });
+      const [created] = await db.insert(discountCodes).values({
+        code: code.toUpperCase().trim(), description: description || null, type,
+        value: String(value), minOrderAmount: minOrderAmount ? String(minOrderAmount) : null,
+        maxUses: maxUses ? parseInt(maxUses) : null, isActive: isActive !== false,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      }).returning();
+      res.status(201).json(created);
+    } catch (err: any) {
+      if (err.code === "23505") return res.status(409).json({ error: "Ese código ya existe" });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/discounts/:id", requireAdmin, async (req, res) => {
+    try {
+      const updates: any = {};
+      if (req.body.isActive !== undefined) updates.isActive = Boolean(req.body.isActive);
+      if (req.body.description !== undefined) updates.description = req.body.description;
+      if (req.body.maxUses !== undefined) updates.maxUses = req.body.maxUses ? parseInt(req.body.maxUses) : null;
+      if (req.body.expiresAt !== undefined) updates.expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+      const [updated] = await db.update(discountCodes).set(updates).where(eq(discountCodes.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ error: "Cupón no encontrado" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete("/api/discounts/:id", requireAdmin, async (req, res) => {
+    try {
+      await db.delete(discountCodes).where(eq(discountCodes.id, req.params.id));
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/discounts/validate", async (req, res) => {
+    try {
+      const { code, orderAmount } = req.body;
+      if (!code) return res.status(400).json({ error: "Código requerido" });
+      const [discount] = await db.select().from(discountCodes).where(eq(discountCodes.code, code.toUpperCase().trim())).limit(1);
+      if (!discount) return res.status(404).json({ error: "Código no válido" });
+      if (!discount.isActive) return res.status(400).json({ error: "Este código no está activo" });
+      if (discount.expiresAt && new Date(discount.expiresAt) < new Date()) return res.status(400).json({ error: "Este código ha expirado" });
+      if (discount.maxUses && discount.usedCount >= discount.maxUses) return res.status(400).json({ error: "Este código ya alcanzó su límite de usos" });
+      if (discount.minOrderAmount && orderAmount < parseFloat(discount.minOrderAmount)) return res.status(400).json({ error: `Monto mínimo de $${parseFloat(discount.minOrderAmount).toLocaleString()} MXN requerido` });
+      const discountAmount = discount.type === "percent" ? (orderAmount * parseFloat(discount.value)) / 100 : Math.min(parseFloat(discount.value), orderAmount);
+      res.json({ valid: true, discount, discountAmount: Math.round(discountAmount) });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── EVENT MAPS ───────────────────────────────────────────────────────────────
+
+  app.get("/api/event-maps", requireAdmin, async (req, res) => {
+    try {
+      const maps = await db.select().from(eventMaps).orderBy(desc(eventMaps.createdAt));
+      res.json(maps);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.get("/api/event-maps/event/:eventId", async (req, res) => {
+    try {
+      const maps = await db.select().from(eventMaps).where(eq(eventMaps.eventId, req.params.eventId));
+      res.json(maps);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/event-maps", requireAdmin, async (req, res) => {
+    try {
+      const { eventId, name, imageUrl, svgData, sections } = req.body;
+      if (!eventId || !name) return res.status(400).json({ error: "eventId y name son requeridos" });
+      const [created] = await db.insert(eventMaps).values({
+        eventId, name, imageUrl: imageUrl || null, svgData: svgData || null, sections: sections || [],
+      }).returning();
+      res.status(201).json(created);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.patch("/api/event-maps/:id", requireAdmin, async (req, res) => {
+    try {
+      const updates: any = { updatedAt: new Date() };
+      const { name, imageUrl, svgData, sections } = req.body;
+      if (name !== undefined) updates.name = name;
+      if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+      if (svgData !== undefined) updates.svgData = svgData;
+      if (sections !== undefined) updates.sections = sections;
+      const [updated] = await db.update(eventMaps).set(updates).where(eq(eventMaps.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ error: "Mapa no encontrado" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete("/api/event-maps/:id", requireAdmin, async (req, res) => {
+    try {
+      await db.delete(eventMaps).where(eq(eventMaps.id, req.params.id));
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
   app.use("/api/payments", paymentsRouter);
   app.use("/api/settings", settingsRouter);
 
