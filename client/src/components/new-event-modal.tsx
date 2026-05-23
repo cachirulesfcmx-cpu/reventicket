@@ -726,7 +726,9 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
     </div>
   );
 
-  const panels = [<StepGeneral key="g" />, <StepVenue key="v" />, <StepTickets key="t" />, <StepPublish key="p" />];
+  // Llamar como funciones (no como componentes JSX) para evitar unmount/remount
+  // en cada keystroke que provoca pérdida de foco e input
+  const panels = [StepGeneral(), StepVenue(), StepTickets(), StepPublish()];
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
