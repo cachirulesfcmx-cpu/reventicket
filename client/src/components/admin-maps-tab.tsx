@@ -310,12 +310,12 @@ function ShapeEditor({
             <>
               <polyline
                 points={[...polyPoints, hoverPt || polyPoints[polyPoints.length - 1]].map(p => `${p.x},${p.y}`).join(" ")}
-                fill="none" stroke="#fff" strokeWidth="2" strokeDasharray="6,3"
+                fill="none" stroke="#fff" strokeWidth="0.5" strokeDasharray="2,1"
               />
               {polyPoints.map((pt, i) => (
                 <circle key={i}
                   cx={`${pt.x}%`} cy={`${pt.y}%`}
-                  r="5" fill={i === 0 ? "#22c55e" : "#fff"} stroke="#000" strokeWidth="1.5"
+                  r="5" fill={i === 0 ? "#22c55e" : "#fff"} stroke="#000" strokeWidth="0.3"
                 />
               ))}
             </>
