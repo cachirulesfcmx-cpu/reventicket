@@ -1,6 +1,21 @@
 // client/src/components/admin-maps-tab.tsx
 import { useState, useRef, useCallback, useEffect } from "react";
-import { apiRequest } from "@/lib/csrf";
+// Admin auth helper - uses admin_token from localStorage like the rest of admin panel
+const adminRequest = async (method: string, url: string, body?: unknown) => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  const opts: RequestInit = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Error en la solicitud");
+  return data;
+};
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -491,13 +506,13 @@ export function AdminMapsTab() {
   const { data: maps = [], isLoading } = useQuery<VenueMap[]>({
     queryKey: ["/api/venue-maps"],
     queryFn: async () => {
-      return await apiRequest<VenueMap[]>("GET", "/api/venue-maps");
+      return await adminRequest("GET", "/api/venue-maps");
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (payload: { name: string; imageUrl: string; sections: Section[] }) => {
-      return await apiRequest<VenueMap>("POST", "/api/venue-maps", payload);
+      return await adminRequest("POST", "/api/venue-maps", payload);
     },
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["/api/venue-maps"] });
@@ -509,7 +524,7 @@ export function AdminMapsTab() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/venue-maps/${id}`);
+      await adminRequest("DELETE", `/api/venue-maps/${id}`);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/venue-maps"] }); toast({ title: "Mapa eliminado" }); },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),

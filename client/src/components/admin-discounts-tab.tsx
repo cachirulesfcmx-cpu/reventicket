@@ -58,7 +58,7 @@ export function AdminDiscountsTab() {
     queryKey: ["/api/discounts"],
     queryFn: async () => {
       const res = await fetch("/api/discounts", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("admin_token") || ""}` },
       });
       if (!res.ok) throw new Error("Error cargando cupones");
       return res.json();
@@ -71,7 +71,7 @@ export function AdminDiscountsTab() {
     mutationFn: async (data: typeof form) => {
       const res = await fetch("/api/discounts", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("admin_token") || ""}` },
         body: JSON.stringify(data),
       });
       const json = await res.json();
@@ -91,7 +91,7 @@ export function AdminDiscountsTab() {
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       const res = await fetch(`/api/discounts/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("admin_token") || ""}` },
         body: JSON.stringify({ isActive }),
       });
       if (!res.ok) throw new Error("Error actualizando cupón");
@@ -105,7 +105,7 @@ export function AdminDiscountsTab() {
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/discounts/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("admin_token") || ""}` },
       });
       if (!res.ok) throw new Error("Error eliminando cupón");
     },
