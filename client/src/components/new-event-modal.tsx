@@ -117,7 +117,7 @@ const DEFAULT_FORM: FormData = {
   activeSections: [], deliveryMethods: ["📱 QR WhatsApp"],
   minResalePrice: "", maxResalePrice: "", platformFee: "10",
   saleCloseDate: "", resaleCloseDate: "",
-  publishStatus: "published", scheduledAt: "", venueMapId: "",
+  publishStatus: "published", scheduledAt: "",
 };
 
 // ─── Venue SVG Map ────────────────────────────────────────────────────────────
@@ -213,12 +213,6 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
   const [confirmed, setConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const { toast } = useToast();
-  const [venueMaps, setVenueMaps] = useState<Array<{id:string;name:string;imageUrl:string|null;sections:any[]}>>([]);
-  useEffect(() => {
-    const token = localStorage.getItem("admin_token");
-    fetch("/api/venue-maps", { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then(r => r.ok ? r.json() : []).then(setVenueMaps).catch(() => {});
-  }, []);
 
   // Try to use the create hook if it exists, otherwise we'll handle manually
   let createEvent: ((data: unknown) => Promise<unknown>) | null = null;
@@ -487,47 +481,36 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Mapa de secciones</Label>
-        {venueMaps.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-            No hay mapas creados. Ve a <strong>Mapas de Recintos</strong> para crear uno.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Select value={form.venueMapId || ""} onValueChange={v => {
-              const m = venueMaps.find(x => x.id === v);
-              set("venueMapId", v);
-              set("activeSections", m?.sections?.map((s:any) => s.id) || []);
-            }}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar mapa..." /></SelectTrigger>
-              <SelectContent>
-                {venueMaps.map(m => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.name} ({m.sections?.length || 0} secciones)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.venueMapId && (() => {
-              const m = venueMaps.find(x => x.id === form.venueMapId);
-              if (!m) return null;
+        <div className="flex items-center justify-between">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Mapa interactivo de secciones</Label>
+          {form.activeSections.length > 0 && (
+            <Badge variant="outline" className="text-xs">{form.activeSections.length} activas</Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">Haz clic en una sección para activarla y configurar precios</p>
+        <VenueMap active={form.activeSections} onToggle={toggleSection} />
+      </div>
+
+      {form.activeSections.length > 0 && (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Secciones activas</Label>
+          <div className="rounded-lg border border-border divide-y divide-border">
+            {form.activeSections.map(id => {
+              const s = SECTIONS[id];
+              if (!s) return null;
               return (
-                <div className="space-y-2">
-                  {m.imageUrl && <img src={m.imageUrl} alt={m.name} className="w-full rounded-lg object-contain max-h-48 border border-border" />}
-                  <div className="flex flex-wrap gap-1.5">
-                    {(m.sections||[]).map((s:any) => (
-                      <span key={s.id} style={{background:s.color+"22",color:s.color,border:`1px solid ${s.color}55`}}
-                        className="text-xs px-2 py-0.5 rounded-full font-medium">
-                        {s.name} · ${s.price?.toLocaleString()}
-                      </span>
-                    ))}
-                  </div>
+                <div key={id} className="flex items-center gap-3 px-3 py-2">
+                  <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+                  <span className="text-sm flex-1">{s.name}</span>
+                  <span className="text-xs text-muted-foreground">{s.capacity} lugares</span>
+                  <span className="text-sm font-medium text-primary">${parseInt(s.price).toLocaleString()}</span>
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
                 </div>
               );
-            })()}
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 
