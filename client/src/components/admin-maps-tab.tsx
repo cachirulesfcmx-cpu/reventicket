@@ -491,18 +491,13 @@ export function AdminMapsTab() {
   const { data: maps = [], isLoading } = useQuery<VenueMap[]>({
     queryKey: ["/api/venue-maps"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/venue-maps");
-      if (!res.ok) throw new Error("Error cargando mapas");
-      return res.json();
+      return await apiRequest<VenueMap[]>("GET", "/api/venue-maps");
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (payload: { name: string; imageUrl: string; sections: Section[] }) => {
-      const res = await apiRequest("POST", "/api/venue-maps", payload);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Error guardando mapa");
-      return json;
+      return await apiRequest<VenueMap>("POST", "/api/venue-maps", payload);
     },
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["/api/venue-maps"] });
@@ -514,8 +509,7 @@ export function AdminMapsTab() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await apiRequest("DELETE", `/api/venue-maps/${id}`);
-      if (!res.ok) throw new Error("Error eliminando mapa");
+      await apiRequest("DELETE", `/api/venue-maps/${id}`);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/venue-maps"] }); toast({ title: "Mapa eliminado" }); },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
