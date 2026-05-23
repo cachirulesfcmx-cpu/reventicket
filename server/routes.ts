@@ -1578,6 +1578,47 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
+
+  // ─── VENUE MAPS (reutilizables, sin evento) ──────────────────────────────────
+
+  app.get("/api/venue-maps", requireAdmin, async (req, res) => {
+    try {
+      const result = await pool.query("SELECT * FROM venue_maps ORDER BY created_at DESC");
+      res.json(result.rows.map(r => ({ ...r, sections: r.sections || [] })));
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/venue-maps", requireAdmin, async (req, res) => {
+    try {
+      const { name, imageUrl, sections } = req.body;
+      if (!name) return res.status(400).json({ error: "name es requerido" });
+      const result = await pool.query(
+        "INSERT INTO venue_maps (name, image_url, sections) VALUES ($1, $2, $3) RETURNING *",
+        [name, imageUrl || null, JSON.stringify(sections || [])]
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.patch("/api/venue-maps/:id", requireAdmin, async (req, res) => {
+    try {
+      const { name, imageUrl, sections } = req.body;
+      const result = await pool.query(
+        "UPDATE venue_maps SET name=COALESCE($1,name), image_url=COALESCE($2,image_url), sections=COALESCE($3,sections), updated_at=NOW() WHERE id=$4 RETURNING *",
+        [name||null, imageUrl||null, sections ? JSON.stringify(sections) : null, req.params.id]
+      );
+      if (!result.rows[0]) return res.status(404).json({ error: "Mapa no encontrado" });
+      res.json(result.rows[0]);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete("/api/venue-maps/:id", requireAdmin, async (req, res) => {
+    try {
+      await pool.query("DELETE FROM venue_maps WHERE id=$1", [req.params.id]);
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
   app.use("/api/payments", paymentsRouter);
   app.use("/api/settings", settingsRouter);
 
