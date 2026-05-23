@@ -428,11 +428,11 @@ export function MapViewer({ map, onSelect }: { map: VenueMap; onSelect?: (s: Sec
     }
     if (sec.shape === "ellipse") {
       return <g key={sec.id} style={{cursor:"pointer"}} onClick={click}>
-        <ellipse cx={`${(sec.x||0)+(sec.w||0)/2}%`} cy={`${(sec.y||0)+(sec.h||0)/2}%`}
-          rx={`${(sec.w||0)/2}%`} ry={`${(sec.h||0)/2}%`} fill={fill} stroke={sec.color} strokeWidth={sw}/>{label}</g>;
+        <ellipse cx={`${(sec.x||0)+(sec.w||0)/2}`} cy={`${(sec.y||0)+(sec.h||0)/2}`}
+          rx={`${(sec.w||0)/2}`} ry={`${(sec.h||0)/2}`} fill={fill} stroke={sec.color} strokeWidth={sw}/>{label}</g>;
     }
     return <g key={sec.id} style={{cursor:"pointer"}} onClick={click}>
-      <rect x={`${sec.x||0}%`} y={`${sec.y||0}%`} width={`${sec.w||0}%`} height={`${sec.h||0}%`}
+      <rect x={`${sec.x||0}`} y={`${sec.y||0}`} width={`${sec.w||0}`} height={`${sec.h||0}`}
         fill={fill} stroke={sec.color} strokeWidth={sw} rx="4"/>{label}</g>;
   };
 

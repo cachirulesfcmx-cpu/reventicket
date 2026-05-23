@@ -32,7 +32,7 @@ app.use("/api", generalApiLimiter);
 
 app.use(
   express.json({
-    limit: "10kb",
+    limit: "15mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
