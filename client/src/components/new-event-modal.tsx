@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -225,6 +225,22 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
   });
   const selectedMap = venueMaps.find((m: any) => String(m.id) === form.venueMapId) ?? null;
 
+  // Auto-poblar tickets desde las secciones del mapa seleccionado
+  useEffect(() => {
+    if (!selectedMap || !selectedMap.sections?.length) return;
+    const ticketsFromSections = selectedMap.sections.map((s: any, i: number) => ({
+      id: Date.now() + i,
+      name: s.name,
+      basePrice: "",
+      resellerPrice: "",
+      available: s.capacity ? String(s.capacity) : "",
+      section: s.name,
+      benefits: "",
+    }));
+    setForm(f => ({ ...f, tickets: ticketsFromSections }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.venueMapId]);
+
   // Try to use the create hook if it exists, otherwise we'll handle manually
   let createEvent: ((data: unknown) => Promise<unknown>) | null = null;
   try {
@@ -344,29 +360,16 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
         <Input id="ev-title" placeholder="Ej. Bad Bunny — World's Hottest Tour" value={form.title} onChange={e => set("title", e.target.value)} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>Categoría *</Label>
-          <Select value={form.category} onValueChange={v => set("category", v)}>
-            <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-            <SelectContent>
-              {["Concierto","Festival","Deportes","Teatro","Lucha libre","Stand-up","Electrónica","Otro"].map(c => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Ciudad *</Label>
-          <Select value={form.city} onValueChange={v => set("city", v)}>
-            <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-            <SelectContent>
-              {["Ciudad de México","Guadalajara","Monterrey","Puebla","Cancún","Tijuana","Otra ciudad"].map(c => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="space-y-1.5">
+        <Label>Categoría *</Label>
+        <Select value={form.category} onValueChange={v => set("category", v)}>
+          <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+          <SelectContent>
+            {["Concierto","Festival","Deportes","Teatro","Lucha libre","Stand-up","Electrónica","Otro"].map(c => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -474,39 +477,11 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
 
   const StepVenue = () => (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>Recinto *</Label>
-          <Select value={form.venue} onValueChange={handleVenueChange}>
-            <SelectTrigger><SelectValue placeholder="Seleccionar recinto..." /></SelectTrigger>
-            <SelectContent>
-              {apiVenues.length === 0 && (
-                <SelectItem value="__none__" disabled>No hay recintos — crea uno primero</SelectItem>
-              )}
-              {apiVenues.map((v: any) => (
-                <SelectItem key={String(v.id)} value={String(v.id)}>
-                  {v.name}{v.city ? ` — ${v.city}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {apiVenues.length === 0 && (
-            <p className="text-xs text-amber-500 mt-1">⚠️ Primero crea un recinto en la pestaña "Recintos" del panel admin.</p>
-          )}
-        </div>
-        <div className="space-y-1.5">
-          <Label>Capacidad total</Label>
-          <Input type="number" placeholder="65000" value={form.totalCapacity} onChange={e => set("totalCapacity", e.target.value)} />
-        </div>
-      </div>
 
-      <div className="space-y-1.5">
-        <Label>Dirección completa</Label>
-        <Input value={form.address} onChange={e => set("address", e.target.value)} placeholder="Viaducto Piedad 9, Granjas México, CDMX" />
-      </div>
-
+      {/* Selector de mapa — es la fuente única del recinto */}
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Mapa del recinto</Label>
+        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Recinto / Mapa *</Label>
+        <p className="text-xs text-muted-foreground">Selecciona el mapa que creaste en "Mapas de Recintos". Las secciones se detectarán automáticamente.</p>
         {venueMaps.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-4 text-center">
             <Map className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
@@ -514,34 +489,74 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
             <p className="text-xs text-muted-foreground mt-1">Crea uno en <strong>Panel Admin → Mapas de Recintos</strong>.</p>
           </div>
         ) : (
-          <>
-            <Select value={form.venueMapId} onValueChange={v => set("venueMapId", v)}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar mapa del recinto..." /></SelectTrigger>
+          <Select value={form.venueMapId} onValueChange={v => set("venueMapId", v)}>
+            <SelectTrigger><SelectValue placeholder="Seleccionar recinto / mapa..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Sin mapa</SelectItem>
+              {venueMaps.map((m: any) => (
+                <SelectItem key={String(m.id)} value={String(m.id)}>
+                  {m.name}{m.sections?.length ? ` · ${m.sections.length} secciones` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {/* Vista previa del mapa */}
+      {selectedMap && selectedMap.imageUrl && (
+        <div className="rounded-xl overflow-hidden border border-border">
+          <div className="bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2">
+            <Map className="h-3.5 w-3.5" />
+            {selectedMap.name}
+            {selectedMap.sections?.length > 0 && (
+              <Badge variant="outline" className="text-xs ml-auto">{selectedMap.sections.length} secciones detectadas</Badge>
+            )}
+          </div>
+          <div className="p-3 h-64">
+            <MapViewer map={selectedMap} />
+          </div>
+        </div>
+      )}
+
+      {/* Secciones detectadas */}
+      {selectedMap?.sections?.length > 0 && (
+        <div className="rounded-lg border border-border divide-y divide-border">
+          {selectedMap.sections.map((s: any) => (
+            <div key={s.id} className="flex items-center gap-3 px-3 py-2">
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+              <span className="text-sm flex-1">{s.name}</span>
+              <span className="text-xs text-muted-foreground">{s.capacity?.toLocaleString() ?? "—"} lugares</span>
+              <span className="text-xs text-primary font-medium">precio → en Boletos</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Datos del lugar */}
+      <div className="space-y-3">
+        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Datos del lugar</Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Ciudad *</Label>
+            <Select value={form.city} onValueChange={v => set("city", v)}>
+              <SelectTrigger><SelectValue placeholder="Ciudad..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">Sin mapa</SelectItem>
-                {venueMaps.map((m: any) => (
-                  <SelectItem key={String(m.id)} value={String(m.id)}>
-                    {m.name}{m.sections?.length ? ` · ${m.sections.length} secciones` : ""}
-                  </SelectItem>
+                {["Ciudad de México","Guadalajara","Monterrey","Puebla","Cancún","Tijuana","Otra ciudad"].map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {selectedMap && selectedMap.imageUrl && (
-              <div className="mt-3 rounded-xl overflow-hidden border border-border">
-                <div className="bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2">
-                  <Map className="h-3.5 w-3.5" />
-                  Vista previa — {selectedMap.name}
-                  {selectedMap.sections?.length > 0 && (
-                    <Badge variant="outline" className="text-xs ml-auto">{selectedMap.sections.length} secciones</Badge>
-                  )}
-                </div>
-                <div className="p-3 h-64">
-                  <MapViewer map={selectedMap} />
-                </div>
-              </div>
-            )}
-          </>
-        )}
+          </div>
+          <div className="space-y-1.5">
+            <Label>Capacidad total</Label>
+            <Input type="number" placeholder="65000" value={form.totalCapacity} onChange={e => set("totalCapacity", e.target.value)} />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Dirección completa</Label>
+          <Input value={form.address} onChange={e => set("address", e.target.value)} placeholder="Viaducto Piedad 9, Granjas México, CDMX" />
+        </div>
       </div>
     </div>
   );
@@ -549,57 +564,58 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
   const StepTickets = () => (
     <div className="space-y-5">
       <div>
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Tipos de boleto</Label>
-        <p className="text-xs text-muted-foreground mt-1">Define los niveles de precio y disponibilidad</p>
+        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Precios por sección</Label>
+        {selectedMap?.sections?.length > 0
+          ? <p className="text-xs text-muted-foreground mt-1">Secciones detectadas del mapa. Define precio y disponibilidad para cada una.</p>
+          : <p className="text-xs text-muted-foreground mt-1">Selecciona un mapa en el paso anterior para auto-detectar secciones, o agrega tipos manualmente.</p>
+        }
       </div>
 
       <div className="space-y-3">
-        {form.tickets.map(ticket => (
-          <div key={ticket.id} className="rounded-lg border border-border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <Input
-                value={ticket.name}
-                onChange={e => updateTicket(ticket.id, "name", e.target.value)}
-                className="h-7 text-sm font-medium border-0 p-0 focus-visible:ring-0 w-auto max-w-[200px]"
-              />
-              <button type="button" onClick={() => removeTicket(ticket.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Precio base</Label>
-                <Input type="number" placeholder="800" value={ticket.basePrice} onChange={e => updateTicket(ticket.id, "basePrice", e.target.value)} />
+        {form.tickets.map(ticket => {
+          // Secciones disponibles: del mapa si existe, si no vacía (el admin la escribe)
+          const mapSections: string[] = selectedMap?.sections?.map((s: any) => s.name) ?? [];
+          return (
+            <div key={ticket.id} className="rounded-lg border border-border p-4 space-y-3">
+              <div className="flex items-center gap-2 justify-between">
+                {/* Color dot si la sección existe en el mapa */}
+                {(() => {
+                  const ms = selectedMap?.sections?.find((s: any) => s.name === ticket.section || s.name === ticket.name);
+                  return ms ? <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: ms.color }} /> : null;
+                })()}
+                <Input
+                  value={ticket.name}
+                  onChange={e => updateTicket(ticket.id, "name", e.target.value)}
+                  className="h-7 text-sm font-medium border-0 p-0 focus-visible:ring-0 flex-1"
+                />
+                <button type="button" onClick={() => removeTicket(ticket.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Precio reventa</Label>
-                <Input type="number" placeholder="1200" value={ticket.resellerPrice} onChange={e => updateTicket(ticket.id, "resellerPrice", e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Disponibles</Label>
-                <Input type="number" placeholder="5000" value={ticket.available} onChange={e => updateTicket(ticket.id, "available", e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Sección en mapa</Label>
-                <Select value={ticket.section} onValueChange={v => updateTicket(ticket.id, "section", v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sección..." /></SelectTrigger>
-                  <SelectContent>
-                    {Object.values(SECTIONS).map(s => <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Precio base (MXN)</Label>
+                  <Input type="number" placeholder="800" value={ticket.basePrice} onChange={e => updateTicket(ticket.id, "basePrice", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Precio reventa</Label>
+                  <Input type="number" placeholder="1200" value={ticket.resellerPrice} onChange={e => updateTicket(ticket.id, "resellerPrice", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Disponibles</Label>
+                  <Input type="number" placeholder="5000" value={ticket.available} onChange={e => updateTicket(ticket.id, "available", e.target.value)} />
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Beneficios</Label>
-                <Input placeholder="Acceso, parking..." value={ticket.benefits} onChange={e => updateTicket(ticket.id, "benefits", e.target.value)} className="h-8 text-xs" />
+                <Input placeholder="Acceso VIP, parking, Meet & Greet..." value={ticket.benefits} onChange={e => updateTicket(ticket.id, "benefits", e.target.value)} className="h-8 text-xs" />
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <button type="button" onClick={addTicket}
           className="w-full border-2 border-dashed border-border rounded-lg py-3 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-2">
-          <Plus className="h-4 w-4" /> Agregar tipo de boleto
+          <Plus className="h-4 w-4" /> Agregar sección / tipo de boleto
         </button>
       </div>
 

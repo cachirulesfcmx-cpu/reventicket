@@ -37,7 +37,7 @@ interface Section {
   id: string;
   name: string;
   color: string;
-  price: number;
+  price?: number;   // opcional — el precio se define al crear el evento
   capacity: number;
   shape: ShapeType;
   // rect & ellipse: x,y,w,h in % of canvas
@@ -112,7 +112,6 @@ function ShapeEditor({
       id: Date.now().toString(),
       name: `Sección ${sections.length + 1}`,
       color: COLORS[colorIdx],
-      price: 0,
       capacity: 1000,
       shape: sec.shape!,
       ...sec,
@@ -225,8 +224,10 @@ function ShapeEditor({
           stroke="rgba(0,0,0,0.7)" strokeWidth="3" paintOrder="stroke">{sec.name}</text>
         <text x={`${cx}%`} y={`${cy - 1}%`} textAnchor="middle" dominantBaseline="middle"
           fontSize="11" fontWeight="700" fill="#fff">{sec.name}</text>
-        <text x={`${cx}%`} y={`${cy + 3.5}%`} textAnchor="middle" dominantBaseline="middle"
-          fontSize="10" fontWeight="600" fill={sec.color}>${sec.price.toLocaleString()}</text>
+        {sec.capacity > 0 && (
+          <text x={`${cx}%`} y={`${cy + 3.5}%`} textAnchor="middle" dominantBaseline="middle"
+            fontSize="10" fontWeight="500" fill={sec.color}>{sec.capacity.toLocaleString()} lug.</text>
+        )}
       </>
     );
 
@@ -397,12 +398,7 @@ function ShapeEditor({
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Precio (MXN)</Label>
-              <Input type="number" value={editPanel.price} className="h-8 text-sm"
-                onChange={e => { const v = parseFloat(e.target.value) || 0; updateSection(editPanel.id, "price", v); setEditPanel(s => s ? { ...s, price: v } : null); }} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Capacidad</Label>
+              <Label className="text-xs">Capacidad (lugares)</Label>
               <Input type="number" value={editPanel.capacity} className="h-8 text-sm"
                 onChange={e => { const v = parseInt(e.target.value) || 0; updateSection(editPanel.id, "capacity", v); setEditPanel(s => s ? { ...s, capacity: v } : null); }} />
             </div>
@@ -420,7 +416,7 @@ function ShapeEditor({
               style={{ background: s.color + "22", color: s.color, borderColor: s.color + "66",
                 outline: selected === s.id ? `2px solid ${s.color}` : "none" }}>
               <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-              {s.name} · ${s.price.toLocaleString()}
+              {s.name} · {s.capacity.toLocaleString()} lug.
             </button>
           ))}
         </div>
@@ -462,8 +458,10 @@ export function MapViewer({ map, onSelect }: { map: VenueMap; onSelect?: (s: Sec
           stroke="rgba(0,0,0,0.8)" strokeWidth="0.6" paintOrder="stroke">{sec.name}</text>
         <text x={cx} y={cy - 1} textAnchor="middle" dominantBaseline="middle"
           fontSize="2.5" fontWeight="700" fill="#fff">{sec.name}</text>
-        <text x={cx} y={cy + 2.5} textAnchor="middle" dominantBaseline="middle"
-          fontSize="2.2" fontWeight="600" fill={sec.color}>${sec.price.toLocaleString()}</text>
+        {sec.capacity > 0 && (
+          <text x={cx} y={cy + 2.5} textAnchor="middle" dominantBaseline="middle"
+            fontSize="2.2" fontWeight="500" fill={sec.color}>{sec.capacity.toLocaleString()} lug.</text>
+        )}
       </>
     );
 
@@ -527,7 +525,6 @@ export function MapViewer({ map, onSelect }: { map: VenueMap; onSelect?: (s: Sec
             <p className="font-semibold text-sm">{sel.name}</p>
             <p className="text-xs text-muted-foreground">{sel.capacity.toLocaleString()} lugares</p>
           </div>
-          <p className="text-lg font-bold" style={{ color: sel.color }}>${sel.price.toLocaleString()}</p>
         </div>
       )}
     </div>
@@ -649,7 +646,7 @@ export function AdminMapsTab() {
                   {(m.sections||[]).map((s: Section) => (
                     <span key={s.id} style={{ background: s.color+"22", color: s.color, border: `1px solid ${s.color}55` }}
                       className="text-xs px-2 py-0.5 rounded-full font-medium">
-                      {s.name} · ${s.price.toLocaleString()}
+                      {s.name} · {s.capacity.toLocaleString()} lug.
                     </span>
                   ))}
                 </div>
