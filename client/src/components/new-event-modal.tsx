@@ -408,10 +408,29 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
 
       <div className="space-y-2">
         <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Foto de portada</Label>
-        <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
-          <Upload className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Arrastra una imagen o <span className="text-primary">haz clic para subir</span></p>
-          <p className="text-xs text-muted-foreground mt-1">JPG, PNG o WEBP · máx 4MB · 1200×630px recomendado</p>
+        <input id="event-cover-upload" type="file" accept="image/*" className="hidden"
+          onChange={e => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (file.size > 4 * 1024 * 1024) { alert("La imagen no puede pesar más de 4MB"); return; }
+            const reader = new FileReader();
+            reader.onload = ev => set("image", ev.target?.result as string);
+            reader.readAsDataURL(file);
+          }} />
+        <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all"
+          onClick={() => document.getElementById("event-cover-upload")?.click()}>
+          {form.image ? (
+            <div className="space-y-2">
+              <img src={form.image} alt="portada" className="max-h-32 mx-auto rounded-lg object-cover" />
+              <p className="text-xs text-muted-foreground">Haz clic para cambiar la imagen</p>
+            </div>
+          ) : (
+            <>
+              <Upload className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Arrastra una imagen o <span className="text-primary">haz clic para subir</span></p>
+              <p className="text-xs text-muted-foreground mt-1">JPG, PNG o WEBP · máx 4MB · 1200×630px recomendado</p>
+            </>
+          )}
         </div>
       </div>
 
