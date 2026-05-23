@@ -54,6 +54,7 @@ function ShapeEditor({
   onChange: (s: Section[]) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [svgSize, setSvgSize] = useState({ w: 800, h: 600 });
   const [tool, setTool] = useState<Tool>("select");
   const [selected, setSelected] = useState<string | null>(null);
   const [drawing, setDrawing] = useState(false);
@@ -63,6 +64,23 @@ function ShapeEditor({
   const [hoverPt, setHoverPt] = useState<{ x: number; y: number } | null>(null);
   const [editPanel, setEditPanel] = useState<Section | null>(null);
   const [imgNaturalRatio, setImgNaturalRatio] = useState(1);
+
+  useEffect(() => {
+    const update = () => {
+      if (svgRef.current) {
+        const r = svgRef.current.getBoundingClientRect();
+        setSvgSize({ w: r.width, h: r.height });
+      }
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const toSvgPx = useCallback((p: { x: number; y: number }) => ({
+    x: (p.x / 100) * svgSize.w,
+    y: (p.y / 100) * svgSize.h,
+  }), [svgSize]);
 
   const getSVGPoint = useCallback((e: React.MouseEvent): { x: number; y: number } => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -197,7 +215,7 @@ function ShapeEditor({
     );
 
     if (sec.shape === "polygon" && sec.points) {
-      const pts = sec.points.map(p => `${p.x},${p.y}`).join(" ");
+      const pts = sec.points.map(p => { const px = toSvgPx(p); return `${px.x},${px.y}`; }).join(" ");
       return (
         <g key={sec.id} style={{ cursor: tool === "select" ? "pointer" : "default" }} onClick={onClick}>
           <polygon points={pts} fill={fill} stroke={stroke} strokeWidth={sw} />
@@ -278,7 +296,7 @@ function ShapeEditor({
       <div className="relative rounded-xl overflow-hidden border border-border select-none"
         style={{ cursor: tool === "select" ? "default" : tool === "polygon" ? "crosshair" : "crosshair" }}>
         <img src={imageUrl} alt="Recinto" className="w-full h-auto block pointer-events-none" draggable={false} />
-        <svg ref={svgRef} className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none"
+        <svg ref={svgRef} className="absolute inset-0 w-full h-full"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -309,13 +327,13 @@ function ShapeEditor({
           {tool === "polygon" && polyPoints.length > 0 && (
             <>
               <polyline
-                points={[...polyPoints, hoverPt || polyPoints[polyPoints.length - 1]].map(p => `${p.x},${p.y}`).join(" ")}
-                fill="none" stroke="#fff" strokeWidth="0.5" strokeDasharray="2,1"
+                points={[...polyPoints, hoverPt || polyPoints[polyPoints.length - 1]].map(p => { const px = toSvgPx(p); return `${px.x},${px.y}`; }).join(" ")}
+                fill="none" stroke="#fff" strokeWidth="2" strokeDasharray="6,3"
               />
               {polyPoints.map((pt, i) => (
                 <circle key={i}
                   cx={`${pt.x}%`} cy={`${pt.y}%`}
-                  r="5" fill={i === 0 ? "#22c55e" : "#fff"} stroke="#000" strokeWidth="0.3"
+                  r="5" fill={i === 0 ? "#22c55e" : "#fff"} stroke="#000" strokeWidth="1.5"
                 />
               ))}
             </>
@@ -440,7 +458,7 @@ export function MapViewer({ map, onSelect }: { map: VenueMap; onSelect?: (s: Sec
     <div className="space-y-3">
       <div className="relative rounded-xl overflow-hidden border border-border">
         <img src={map.imageUrl} alt={map.name} className="w-full h-auto block" draggable={false} />
-        <svg ref={svgRef} className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" onClick={() => setSel(null)}>
+        <svg ref={svgRef} className="absolute inset-0 w-full h-full" onClick={() => setSel(null)}>
           {map.sections.map(renderSec)}
         </svg>
       </div>
