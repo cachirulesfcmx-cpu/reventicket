@@ -1,5 +1,6 @@
 // client/src/components/admin-maps-tab.tsx
 import { useState, useRef, useCallback, useEffect } from "react";
+import { apiRequest } from "@/lib/csrf";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
