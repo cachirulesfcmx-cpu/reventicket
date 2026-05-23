@@ -9,14 +9,14 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SkeletonShimmer, CarouselSkeleton } from "@/components/skeleton-shimmer";
 
-// ─── Neon colors per category ─────────────────────────────────────────────────
+// ─── Neon color palette per category ─────────────────────────────────────────
 
-const NEON: Record<string, { text: string; glow: string; border: string; bg: string }> = {
-  Concert: { text: "#c084fc", glow: "rgba(192,132,252,0.5)", border: "rgba(192,132,252,0.4)", bg: "rgba(192,132,252,0.15)" },
-  Sports:  { text: "#4ade80", glow: "rgba(74,222,128,0.5)",  border: "rgba(74,222,128,0.4)",  bg: "rgba(74,222,128,0.15)" },
-  Theater: { text: "#fb923c", glow: "rgba(251,146,60,0.5)",  border: "rgba(251,146,60,0.4)",  bg: "rgba(251,146,60,0.15)" },
-  F1:      { text: "#f87171", glow: "rgba(248,113,113,0.5)", border: "rgba(248,113,113,0.4)", bg: "rgba(248,113,113,0.15)" },
-  default: { text: "#4ade80", glow: "rgba(74,222,128,0.5)",  border: "rgba(74,222,128,0.4)",  bg: "rgba(74,222,128,0.15)" },
+const NEON: Record<string, { text: string; glow: string; border: string; bg: string; glowRgb: string }> = {
+  Concert: { text: "#c084fc", glow: "rgba(192,132,252,0.55)", border: "rgba(192,132,252,0.5)", bg: "rgba(192,132,252,0.12)", glowRgb: "192,132,252" },
+  Sports:  { text: "#4ade80", glow: "rgba(74,222,128,0.55)",  border: "rgba(74,222,128,0.5)",  bg: "rgba(74,222,128,0.12)",  glowRgb: "74,222,128" },
+  Theater: { text: "#fb923c", glow: "rgba(251,146,60,0.55)",  border: "rgba(251,146,60,0.5)",  bg: "rgba(251,146,60,0.12)",  glowRgb: "251,146,60" },
+  F1:      { text: "#f87171", glow: "rgba(248,113,113,0.55)", border: "rgba(248,113,113,0.5)", bg: "rgba(248,113,113,0.12)", glowRgb: "248,113,113" },
+  default: { text: "#4ade80", glow: "rgba(74,222,128,0.55)",  border: "rgba(74,222,128,0.5)",  bg: "rgba(74,222,128,0.12)",  glowRgb: "74,222,128" },
 };
 const nc = (cat: string) => NEON[cat] || NEON.default;
 
@@ -45,9 +45,9 @@ function SectionTitle({ children, color = "#4ade80" }: { children: string; color
   return (
     <h2 style={{
       fontFamily: "'Oswald', sans-serif",
-      fontSize: "clamp(17px,3.5vw,20px)",
+      fontSize: "clamp(18px,3.8vw,22px)",
       fontWeight: 800,
-      letterSpacing: "0.04em",
+      letterSpacing: "0.06em",
       textTransform: "uppercase",
       background: `linear-gradient(90deg, ${color} 0%, #a855f7 100%)`,
       WebkitBackgroundClip: "text",
@@ -90,9 +90,12 @@ function HeroSlider({ events, venues, onEventClick }: {
           position: "relative",
           borderRadius: 22,
           overflow: "hidden",
-          height: "clamp(380px, 52vw, 520px)",
+          height: "clamp(340px, 50vw, 500px)",
           cursor: "pointer",
+          transition: "box-shadow 0.3s ease",
         }}
+        onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 0 40px rgba(${colors.glowRgb},0.4), 0 20px 60px rgba(0,0,0,0.6)`)}
+        onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
       >
         <AnimatePresence mode="sync">
           <motion.img
@@ -100,81 +103,78 @@ function HeroSlider({ events, venues, onEventClick }: {
             src={ev.image || "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=900"}
             alt={ev.title}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.55 }}
+            initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.6 }}
           />
         </AnimatePresence>
 
-        {/* Gradient */}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.05) 20%, rgba(0,0,0,0.88) 100%)" }} />
+        {/* Gradient overlays */}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.02) 10%, rgba(6,6,18,0.92) 100%)" }} />
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at bottom left, rgba(${colors.glowRgb},0.12) 0%, transparent 60%)` }} />
 
         {/* Date pill */}
-        <div style={{ position: "absolute", top: 14, left: 14, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(10px)", borderRadius: 14, padding: "7px 13px", textAlign: "center", zIndex: 2 }}>
+        <div style={{ position: "absolute", top: 14, left: 14, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(12px)", borderRadius: 14, padding: "7px 13px", textAlign: "center", zIndex: 2, border: "1px solid rgba(255,255,255,0.1)" }}>
           <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{format(new Date(ev.date), "dd")}</div>
           <div style={{ fontSize: 11, color: "#ccc", textTransform: "uppercase", letterSpacing: 1 }}>{format(new Date(ev.date), "MMM", { locale: es })}</div>
         </div>
 
+        {/* Badges */}
+        <div style={{ position: "absolute", top: 14, left: 80, display: "flex", gap: 6, zIndex: 2, flexWrap: "wrap", maxWidth: "60%" }}>
+          {(ev as any).isFeatured && (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+              color: "#fff", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700,
+              boxShadow: "0 2px 12px rgba(124,58,237,0.5)",
+            }}>
+              🎫 Venta General
+            </span>
+          )}
+        </div>
+
         {/* Heart */}
-        <button
-          onClick={e => e.stopPropagation()}
-          style={{ position: "absolute", top: 14, right: 14, width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
-          <Heart style={{ width: 18, height: 18, color: "#fff" }} />
-        </button>
+        <HeartButton style={{ position: "absolute", top: 14, right: 14, zIndex: 2 }} size={36} />
 
         {/* Bottom content */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "0 16px 18px", zIndex: 2 }}>
-          {/* Badges */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 999, padding: "3px 11px", fontSize: 12, fontWeight: 700 }}>
-              {ev.category === "Concert" ? "🎵" : ev.category === "Sports" ? "⚽" : ev.category === "F1" ? "🏎️" : "🎭"}
-              {" "}{ev.category === "Concert" ? "Música" : ev.category === "Sports" ? "Deportes" : ev.category}
-            </span>
-            {(ev as any).isFeatured && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(250,204,21,0.15)", color: "#fbbf24", border: "1px solid rgba(250,204,21,0.4)", borderRadius: 999, padding: "3px 11px", fontSize: 12, fontWeight: 700 }}>
-                ⚡ Trending
-              </span>
-            )}
-          </div>
-
-          {/* Title */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "0 18px 20px", zIndex: 2 }}>
           <h2 style={{
             fontFamily: "'Oswald', sans-serif",
-            fontSize: "clamp(20px, 5vw, 30px)",
+            fontSize: "clamp(22px, 5.5vw, 34px)",
             fontWeight: 800,
             color: colors.text,
             letterSpacing: "-0.01em",
-            marginBottom: 6,
+            marginBottom: 8,
             lineHeight: 1.1,
-            textShadow: `0 0 30px ${colors.glow}`,
+            textShadow: `0 0 40px ${colors.glow}`,
           }}>
             {ev.title.toUpperCase()}
           </h2>
 
-          {/* Meta */}
-          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.75)", fontSize: 13, marginBottom: 3 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.7)", fontSize: 13, marginBottom: 4 }}>
+            <MapPin style={{ width: 13, height: 13, color: colors.text }} />
+            {venue?.name || "México"}{venue?.city ? `, ${venue.city}` : ""}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.55)", fontSize: 13, marginBottom: 16 }}>
             <Calendar style={{ width: 13, height: 13 }} />
             {format(new Date(ev.date), "dd 'de' MMMM yyyy - HH:mm", { locale: es })} hrs
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.55)", fontSize: 13, marginBottom: 14 }}>
-            <MapPin style={{ width: 13, height: 13 }} />
-            {venue?.name || "México"}
-          </div>
 
-          {/* Price + CTA */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             {ev.minPrice && (
-              <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 14 }}>
-                Desde: <strong style={{ color: "#4ade80", fontSize: 20 }}>${Math.round(parseFloat(ev.minPrice)).toLocaleString()}</strong>
+              <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 14 }}>
+                Desde: <strong style={{ color: "#4ade80", fontSize: 22, textShadow: "0 0 20px rgba(74,222,128,0.6)" }}>${Math.round(parseFloat(ev.minPrice)).toLocaleString()}</strong>
               </span>
             )}
             <motion.button
               whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.04, boxShadow: "0 6px 24px rgba(34,197,94,0.55)" }}
               onClick={e => { e.stopPropagation(); onEventClick(ev); }}
               style={{
                 background: "#22c55e", color: "#000", fontWeight: 800, fontSize: 14,
                 padding: "11px 22px", borderRadius: 999, border: "none", cursor: "pointer",
                 boxShadow: "0 4px 18px rgba(34,197,94,0.45)",
                 display: "flex", alignItems: "center", gap: 6,
+                transition: "all 0.2s",
               }}>
               Compra ahora →
             </motion.button>
@@ -183,10 +183,10 @@ function HeroSlider({ events, venues, onEventClick }: {
 
         {/* Dots */}
         {slides.length > 1 && (
-          <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 6, zIndex: 10, paddingBottom: 10 }}>
+          <div style={{ position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 6, zIndex: 10 }}>
             {slides.map((_, i) => (
               <button key={i} onClick={e => { e.stopPropagation(); setCurrent(i); }}
-                style={{ width: i === current ? 26 : 8, height: 8, borderRadius: 999, background: i === current ? "#fff" : "rgba(255,255,255,0.35)", border: "none", cursor: "pointer", padding: 0, transition: "all 0.3s" }} />
+                style={{ width: i === current ? 28 : 8, height: 8, borderRadius: 999, background: i === current ? "#fff" : "rgba(255,255,255,0.3)", border: "none", cursor: "pointer", padding: 0, transition: "all 0.35s ease" }} />
             ))}
           </div>
         )}
@@ -195,27 +195,58 @@ function HeroSlider({ events, venues, onEventClick }: {
   );
 }
 
+// ─── Heart button ─────────────────────────────────────────────────────────────
+
+function HeartButton({ style, size = 30 }: { style?: React.CSSProperties; size?: number }) {
+  const [liked, setLiked] = useState(false);
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); setLiked(l => !l); }}
+      style={{
+        width: size, height: size, borderRadius: "50%",
+        background: liked ? "rgba(248,113,113,0.25)" : "rgba(255,255,255,0.15)",
+        backdropFilter: "blur(10px)",
+        border: liked ? "1px solid rgba(248,113,113,0.5)" : "1px solid rgba(255,255,255,0.12)",
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "all 0.2s ease",
+        ...style,
+      }}
+    >
+      <Heart
+        style={{
+          width: size * 0.45, height: size * 0.45,
+          color: liked ? "#f87171" : "#fff",
+          fill: liked ? "#f87171" : "none",
+          transition: "all 0.2s ease",
+          transform: liked ? "scale(1.2)" : "scale(1)",
+        }}
+      />
+    </button>
+  );
+}
+
 // ─── Category circles row ─────────────────────────────────────────────────────
 
 function CategoryCircles({ active, onChange }: { active: string; onChange: (k: string) => void }) {
   return (
-    <div style={{ display: "flex", gap: 20, overflowX: "auto", padding: "14px 14px 6px", scrollbarWidth: "none" }}>
+    <div style={{ display: "flex", gap: 18, overflowX: "auto", padding: "14px 14px 8px", scrollbarWidth: "none" }}>
       {CIRCLES.map(c => {
         const isOn = active === c.key;
         return (
           <button key={c.key} onClick={() => onChange(c.key)}
-            style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", transition: "transform 0.15s" }}>
+            style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer" }}>
             <div style={{
-              width: 58, height: 58, borderRadius: "50%",
-              background: isOn ? `${c.color}22` : "rgba(255,255,255,0.07)",
-              border: isOn ? `2px solid ${c.color}` : "1.5px solid rgba(255,255,255,0.1)",
+              width: 60, height: 60, borderRadius: "50%",
+              background: isOn ? `rgba(${c.key === "all" ? "34,197,94" : c.key === "Sports" ? "74,222,128" : c.key === "Concert" ? "192,132,252" : c.key === "Theater" ? "251,146,60" : c.key === "F1" ? "248,113,113" : "96,165,250"},0.18)` : "rgba(255,255,255,0.06)",
+              border: isOn ? `2px solid ${c.color}` : "1.5px solid rgba(255,255,255,0.09)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 26, transition: "all 0.2s",
-              boxShadow: isOn ? `0 0 14px ${c.color}55` : "none",
+              fontSize: 26, transition: "all 0.22s ease",
+              boxShadow: isOn ? `0 0 18px ${c.color}60, 0 0 6px ${c.color}40` : "none",
+              transform: isOn ? "scale(1.07)" : "scale(1)",
             }}>
               {c.emoji}
             </div>
-            <span style={{ fontSize: 11, fontWeight: isOn ? 700 : 500, color: isOn ? c.color : "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 11, fontWeight: isOn ? 700 : 500, color: isOn ? c.color : "rgba(255,255,255,0.45)", whiteSpace: "nowrap", transition: "color 0.2s" }}>
               {c.label}
             </span>
           </button>
@@ -229,29 +260,41 @@ function CategoryCircles({ active, onChange }: { active: string; onChange: (k: s
 
 function HScroll({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "4px 14px 8px", scrollbarWidth: "none", scrollSnapType: "x mandatory" }}>
+    <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "4px 14px 10px", scrollbarWidth: "none", scrollSnapType: "x mandatory" }}>
       {children}
     </div>
   );
 }
 
-// ─── Event card (carousel, vertical poster) ───────────────────────────────────
+// ─── Event card (Boletomovil style) ──────────────────────────────────────────
 
 function EventCard({ event, venues, onClick, wide }: { event: APIEvent; venues?: any[]; onClick?: () => void; wide?: boolean }) {
   const venue = venues?.find(v => v.id === event.venueId);
   const colors = nc(event.category);
-  const [liked, setLiked] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const isFeatured = (event as any).isFeatured;
 
   return (
-    <motion.div
+    <div
       onClick={onClick}
-      whileTap={{ scale: 0.97 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        flexShrink: 0, cursor: "pointer", scrollSnapAlign: "start",
-        width: wide ? 200 : 158,
-        borderRadius: 16, overflow: "hidden",
-        background: "#111",
-        border: "1px solid rgba(255,255,255,0.07)",
+        flexShrink: 0,
+        cursor: "pointer",
+        scrollSnapAlign: "start",
+        width: wide ? 210 : 168,
+        borderRadius: 18,
+        overflow: "hidden",
+        background: "#0d0d1a",
+        border: hovered
+          ? `1.5px solid ${colors.border}`
+          : "1.5px solid rgba(255,255,255,0.06)",
+        boxShadow: hovered
+          ? `0 0 28px rgba(${colors.glowRgb},0.35), 0 8px 32px rgba(0,0,0,0.5)`
+          : "0 2px 12px rgba(0,0,0,0.3)",
+        transform: hovered ? "translateY(-3px) scale(1.018)" : "translateY(0) scale(1)",
+        transition: "all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1)",
       }}
     >
       {/* Image */}
@@ -259,69 +302,123 @@ function EventCard({ event, venues, onClick, wide }: { event: APIEvent; venues?:
         <img
           src={event.image || "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=400"}
           alt={event.title}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{
+            width: "100%", height: "100%", objectFit: "cover",
+            transition: "transform 0.4s ease",
+            transform: hovered ? "scale(1.06)" : "scale(1)",
+          }}
           loading="lazy"
         />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%)" }} />
+        {/* Gradient overlay */}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(8,8,22,0.95) 0%, rgba(8,8,22,0.3) 50%, transparent 100%)" }} />
 
-        {/* Date */}
-        <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", borderRadius: 9, padding: "3px 9px", textAlign: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{format(new Date(event.date), "dd")}</div>
-          <div style={{ fontSize: 9, color: "#ccc", textTransform: "uppercase" }}>{format(new Date(event.date), "MMM", { locale: es })}</div>
+        {/* Neon glow when hovered */}
+        {hovered && (
+          <div style={{
+            position: "absolute", inset: 0,
+            background: `radial-gradient(ellipse at bottom, rgba(${colors.glowRgb},0.18) 0%, transparent 65%)`,
+            pointerEvents: "none",
+          }} />
+        )}
+
+        {/* Date pill */}
+        <div style={{
+          position: "absolute", top: 8, left: 8,
+          background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)",
+          borderRadius: 10, padding: "4px 9px", textAlign: "center",
+          border: "1px solid rgba(255,255,255,0.08)",
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{format(new Date(event.date), "dd")}</div>
+          <div style={{ fontSize: 9, color: "#aaa", textTransform: "uppercase", letterSpacing: 0.5 }}>{format(new Date(event.date), "MMM", { locale: es })}</div>
         </div>
 
         {/* Heart */}
-        <button onClick={e => { e.stopPropagation(); setLiked(l => !l); }}
-          style={{ position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.15)", backdropFilter: "blur(6px)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Heart style={{ width: 13, height: 13, color: liked ? "#f87171" : "#fff", fill: liked ? "#f87171" : "none" }} />
-        </button>
+        <HeartButton style={{ position: "absolute", top: 8, right: 8 }} size={28} />
 
-        {/* Price badge */}
-        {event.minPrice && (
-          <div style={{ position: "absolute", bottom: 8, right: 8, background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 7, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>
-            ${Math.round(parseFloat(event.minPrice)).toLocaleString()}
+        {/* Featured badge */}
+        {isFeatured && (
+          <div style={{
+            position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)",
+            background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+            borderRadius: 999, padding: "3px 10px",
+            fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap",
+            boxShadow: "0 2px 10px rgba(124,58,237,0.45)",
+          }}>
+            🎫 Venta General
           </div>
         )}
       </div>
 
       {/* Info */}
-      <div style={{ padding: "9px 10px 11px" }}>
-        <div style={{ color: colors.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3, marginBottom: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+      <div style={{ padding: "10px 11px 13px" }}>
+        <div style={{
+          color: hovered ? colors.text : "#e5e7eb",
+          fontWeight: 700, fontSize: 13.5, lineHeight: 1.3, marginBottom: 5,
+          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+          transition: "color 0.2s ease",
+          textShadow: hovered ? `0 0 20px rgba(${colors.glowRgb},0.5)` : "none",
+        }}>
           {event.title}
         </div>
+
         {venue && (
-          <div style={{ display: "flex", alignItems: "center", gap: 3, color: "rgba(255,255,255,0.45)", fontSize: 11 }}>
-            <MapPin style={{ width: 9, height: 9 }} />{venue.city || venue.name}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "rgba(255,255,255,0.45)", fontSize: 11, marginBottom: 4 }}>
+            <MapPin style={{ width: 9, height: 9, flexShrink: 0 }} />
+            {venue.city || venue.name}
+          </div>
+        )}
+
+        {event.minPrice && (
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>
+            Desde: <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 13 }}>${Math.round(parseFloat(event.minPrice)).toLocaleString()}</span>
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// ─── List event card (Próximos eventos) ──────────────────────────────────────
+// ─── List event card ──────────────────────────────────────────────────────────
 
 function EventCardList({ event, venues, onClick }: { event: APIEvent; venues?: any[]; onClick?: () => void }) {
   const venue = venues?.find(v => v.id === event.venueId);
   const colors = nc(event.category);
-  const [liked, setLiked] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <motion.div onClick={onClick} whileTap={{ scale: 0.985 }}
-      style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 14, cursor: "pointer", border: "1px solid rgba(255,255,255,0.06)" }}>
-      <div style={{ width: 70, height: 70, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "11px 13px",
+        background: hovered ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.035)",
+        borderRadius: 16, cursor: "pointer",
+        border: hovered ? `1px solid ${colors.border}` : "1px solid rgba(255,255,255,0.05)",
+        boxShadow: hovered ? `0 0 18px rgba(${colors.glowRgb},0.2)` : "none",
+        transition: "all 0.2s ease",
+      }}
+    >
+      <div style={{ width: 72, height: 72, borderRadius: 12, overflow: "hidden", flexShrink: 0, border: "1px solid rgba(255,255,255,0.07)" }}>
         <img src={event.image || "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=200"} alt={event.title}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />
+          style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.3s", transform: hovered ? "scale(1.08)" : "scale(1)" }}
+          loading="lazy" />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: "#fff", lineHeight: 1.3, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 3 }}>
-          <span style={{ background: "rgba(255,255,255,0.09)", borderRadius: 6, padding: "2px 8px", fontSize: 11, color: "rgba(255,255,255,0.65)" }}>
+        <div style={{
+          fontWeight: 700, fontSize: 14, lineHeight: 1.3, marginBottom: 4,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          color: hovered ? colors.text : "#fff",
+          transition: "color 0.2s",
+        }}>{event.title}</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+          <span style={{ background: "rgba(255,255,255,0.08)", borderRadius: 6, padding: "2px 8px", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>
             {format(new Date(event.date), "dd")} {format(new Date(event.date), "MMM", { locale: es }).toUpperCase()}
           </span>
         </div>
         {venue && (
-          <div style={{ display: "flex", alignItems: "center", gap: 3, color: "#4ade80", fontSize: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#4ade80", fontSize: 11 }}>
             <MapPin style={{ width: 10, height: 10 }} />{venue.city || venue.name}
           </div>
         )}
@@ -332,12 +429,9 @@ function EventCardList({ event, venues, onClick }: { event: APIEvent; venues?: a
             ${Math.round(parseFloat(event.minPrice)).toLocaleString()}
           </span>
         )}
-        <button onClick={e => { e.stopPropagation(); setLiked(l => !l); }}
-          style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Heart style={{ width: 13, height: 13, color: liked ? "#f87171" : "rgba(255,255,255,0.4)", fill: liked ? "#f87171" : "none" }} />
-        </button>
+        <HeartButton size={28} />
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -345,10 +439,12 @@ function EventCardList({ event, venues, onClick }: { event: APIEvent; venues?: a
 
 function SectionHeader({ title, color, href }: { title: string; color?: string; href: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", marginBottom: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", marginBottom: 12 }}>
       <SectionTitle color={color}>{title}</SectionTitle>
       <Link href={href}>
-        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", display: "flex", alignItems: "center", gap: 2 }}>
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", gap: 2, transition: "color 0.2s" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "#22c55e")}
+          onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}>
           Ver más <ChevronRight style={{ width: 14, height: 14 }} />
         </span>
       </Link>
@@ -417,10 +513,10 @@ export default function Home() {
     return (
       <Layout>
         <div style={{ padding: "8px 12px 0" }}>
-          <SkeletonShimmer style={{ height: "clamp(380px,52vw,520px)", borderRadius: 22 }} />
+          <SkeletonShimmer style={{ height: "clamp(340px,50vw,500px)", borderRadius: 22 }} />
         </div>
         <div style={{ padding: "16px 14px", display: "flex", gap: 12, overflowX: "hidden" }}>
-          {[1,2,3].map(i => <SkeletonShimmer key={i} style={{ width: 158, height: 240, borderRadius: 16, flexShrink: 0 }} />)}
+          {[1,2,3].map(i => <SkeletonShimmer key={i} style={{ width: 168, height: 260, borderRadius: 18, flexShrink: 0 }} />)}
         </div>
       </Layout>
     );
@@ -428,11 +524,12 @@ export default function Home() {
 
   return (
     <Layout>
-      <motion.div className="min-h-screen pb-4"
+      <motion.div
+        className="min-h-screen pb-4"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}>
-
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Pull to refresh */}
         <AnimatePresence>
           {pullDistance > 0 && (
@@ -457,13 +554,22 @@ export default function Home() {
             }}
             style={{
               display: "flex", alignItems: "center", gap: 10,
-              background: "rgba(255,255,255,0.07)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: 16, padding: "10px 14px",
-              backdropFilter: "blur(12px)",
+              background: "rgba(255,255,255,0.06)",
+              border: "1.5px solid rgba(255,255,255,0.1)",
+              borderRadius: 999, padding: "10px 18px",
+              backdropFilter: "blur(16px)",
+              transition: "border-color 0.2s, box-shadow 0.2s",
+            }}
+            onFocus={e => {
+              (e.currentTarget as HTMLFormElement).style.borderColor = "rgba(34,197,94,0.5)";
+              (e.currentTarget as HTMLFormElement).style.boxShadow = "0 0 20px rgba(34,197,94,0.15)";
+            }}
+            onBlur={e => {
+              (e.currentTarget as HTMLFormElement).style.borderColor = "rgba(255,255,255,0.1)";
+              (e.currentTarget as HTMLFormElement).style.boxShadow = "none";
             }}
           >
-            <Search style={{ width: 18, height: 18, color: "rgba(255,255,255,0.45)", flexShrink: 0 }} />
+            <Search style={{ width: 18, height: 18, color: "rgba(255,255,255,0.4)", flexShrink: 0 }} />
             <input
               type="search"
               value={searchQuery}
@@ -477,7 +583,7 @@ export default function Home() {
             />
             {searchQuery && (
               <button type="button" onClick={() => setSearchQuery("")}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", padding: 0 }}>
+                style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)", padding: 0, display: "flex" }}>
                 <X style={{ width: 16, height: 16 }} />
               </button>
             )}
@@ -489,10 +595,10 @@ export default function Home() {
 
         {/* ── POPULARES ── */}
         {popular.length > 0 && (
-          <motion.section style={{ marginTop: 18 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <motion.section style={{ marginTop: 20 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <SectionHeader title="Populares" color="#4ade80" href="/search" />
             <HScroll>
-              {popular.map((ev, i) => (
+              {popular.map(ev => (
                 <EventCard key={ev.id} event={ev} venues={venues} onClick={() => handleEventClick(ev)} />
               ))}
             </HScroll>
@@ -501,7 +607,7 @@ export default function Home() {
 
         {/* ── EVENTOS DESTACADOS ── */}
         {featured.length > 0 && (
-          <motion.section style={{ marginTop: 22 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+          <motion.section style={{ marginTop: 26 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
             <SectionHeader title="Eventos Destacados" color="#a855f7" href="/search" />
             <HScroll>
               {featured.map(ev => (
@@ -513,16 +619,20 @@ export default function Home() {
 
         {/* ── DEPORTES ── */}
         {sports.length > 0 && (
-          <motion.section style={{ marginTop: 22 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.08 }}>
+          <motion.section style={{ marginTop: 26 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.08 }}>
             <SectionHeader title="Deportes" color="#4ade80" href="/search?category=Sports" />
             {/* Sport sub-circles */}
-            <div style={{ display: "flex", gap: 18, overflowX: "auto", padding: "0 14px 12px", scrollbarWidth: "none" }}>
+            <div style={{ display: "flex", gap: 16, overflowX: "auto", padding: "0 14px 12px", scrollbarWidth: "none" }}>
               {SPORT_CIRCLES.map(s => (
-                <button key={s.key} style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer" }}>
-                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(74,222,128,0.08)", border: "1.5px solid rgba(74,222,128,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+                <button key={s.key}
+                  style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer" }}
+                  onMouseEnter={e => { const c = e.currentTarget.querySelector("div") as HTMLDivElement; if (c) { c.style.borderColor = "rgba(74,222,128,0.5)"; c.style.boxShadow = "0 0 14px rgba(74,222,128,0.3)"; }}}
+                  onMouseLeave={e => { const c = e.currentTarget.querySelector("div") as HTMLDivElement; if (c) { c.style.borderColor = "rgba(74,222,128,0.15)"; c.style.boxShadow = "none"; }}}
+                >
+                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(74,222,128,0.06)", border: "1.5px solid rgba(74,222,128,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, transition: "all 0.2s" }}>
                     {s.emoji}
                   </div>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>{s.label}</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", whiteSpace: "nowrap" }}>{s.label}</span>
                 </button>
               ))}
             </div>
@@ -536,7 +646,7 @@ export default function Home() {
 
         {/* ── MÚSICA ── */}
         {music.length > 0 && (
-          <motion.section style={{ marginTop: 22 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <motion.section style={{ marginTop: 26 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
             <SectionHeader title="Música" color="#c084fc" href="/search?category=Concert" />
             <HScroll>
               {music.map(ev => (
@@ -548,16 +658,22 @@ export default function Home() {
 
         {/* ── PRÓXIMOS EVENTOS (lista) ── */}
         {upcoming.length > 0 && (
-          <motion.section style={{ marginTop: 22 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.12 }}>
+          <motion.section style={{ marginTop: 26 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.12 }}>
             <SectionHeader title="Próximos eventos" color="#fb923c" href="/search" />
             <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 14px" }}>
               {upcoming.map(ev => (
                 <EventCardList key={ev.id} event={ev} venues={venues} onClick={() => handleEventClick(ev)} />
               ))}
             </div>
-            <div style={{ textAlign: "center", padding: "14px 0" }}>
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
               <Link href="/search">
-                <span style={{ color: "#22c55e", fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{
+                  color: "#22c55e", fontSize: 13, fontWeight: 600,
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  transition: "text-shadow 0.2s",
+                }}
+                  onMouseEnter={e => (e.currentTarget.style.textShadow = "0 0 14px rgba(34,197,94,0.6)")}
+                  onMouseLeave={e => (e.currentTarget.style.textShadow = "none")}>
                   Ver más <ChevronRight style={{ width: 15, height: 15 }} />
                 </span>
               </Link>
@@ -566,25 +682,37 @@ export default function Home() {
         )}
 
         {/* ── SELL BANNER ── */}
-        <motion.section style={{ margin: "22px 14px 8px" }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-          <div style={{
-            background: "linear-gradient(135deg, rgba(34,197,94,0.07), rgba(168,85,247,0.05))",
-            border: "1px solid rgba(74,222,128,0.14)",
-            borderRadius: 20, padding: "22px 18px", textAlign: "center",
-          }}>
+        <motion.section style={{ margin: "24px 14px 10px" }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+          <div
+            style={{
+              background: "linear-gradient(135deg, rgba(34,197,94,0.08), rgba(168,85,247,0.06))",
+              border: "1px solid rgba(74,222,128,0.16)",
+              borderRadius: 22, padding: "24px 20px", textAlign: "center",
+              transition: "box-shadow 0.3s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 0 30px rgba(34,197,94,0.12)")}
+            onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+          >
             <div style={{
-              fontFamily: "'Oswald', sans-serif", fontSize: "clamp(16px,4vw,20px)", fontWeight: 800,
+              fontFamily: "'Oswald', sans-serif", fontSize: "clamp(16px,4vw,21px)", fontWeight: 800,
               background: "linear-gradient(90deg,#4ade80,#a855f7)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-              letterSpacing: "0.02em", marginBottom: 8, lineHeight: 1.2,
+              letterSpacing: "0.04em", marginBottom: 8, lineHeight: 1.2,
             }}>
               ¿QUIERES VENDER TU EVENTO CON NOSOTROS?
             </div>
-            <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginBottom: 18, lineHeight: 1.5 }}>
               Únete a la plataforma de reventa de boletos en México.
             </p>
-            <motion.button whileTap={{ scale: 0.97 }}
-              style={{ background: "#22c55e", color: "#000", fontWeight: 800, fontSize: 14, padding: "11px 26px", borderRadius: 999, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(34,197,94,0.3)" }}>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.04, boxShadow: "0 6px 24px rgba(34,197,94,0.45)" }}
+              style={{
+                background: "#22c55e", color: "#000", fontWeight: 800, fontSize: 14,
+                padding: "12px 28px", borderRadius: 999, border: "none", cursor: "pointer",
+                boxShadow: "0 4px 16px rgba(34,197,94,0.3)",
+                transition: "all 0.2s",
+              }}>
               Contáctanos →
             </motion.button>
           </div>

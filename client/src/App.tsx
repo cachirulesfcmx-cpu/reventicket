@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { useEffect, Suspense, lazy } from "react";
+import { useEffect, useRef, Suspense, lazy } from "react";
 import { Layout } from "./components/layout";
 import { AdminRoute } from "@/components/admin-route";
 import { InstallPrompt } from "@/components/install-prompt";
@@ -14,12 +14,54 @@ import { ErrorBoundary } from "@/components/error-boundary";
 
 function ScrollToTop() {
   const [location] = useLocation();
-  
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [location]);
-  
+  useEffect(() => { window.scrollTo(0, 0); }, [location]);
   return null;
+}
+
+// ─── Cursor spotlight glow (Boletomovil signature effect) ─────────────────────
+function CursorGlow() {
+  const glowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Only on desktop with real pointer
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+    const el = glowRef.current;
+    if (!el) return;
+
+    let raf: number;
+    let x = -500, y = -500;
+
+    const onMove = (e: MouseEvent) => {
+      x = e.clientX;
+      y = e.clientY;
+    };
+
+    const tick = () => {
+      if (el) {
+        el.style.background = `radial-gradient(600px circle at ${x}px ${y}px, rgba(34,197,94,0.045) 0%, transparent 70%)`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener("mousemove", onMove, { passive: true });
+    raf = requestAnimationFrame(tick);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={glowRef}
+      style={{
+        position: "fixed", inset: 0, zIndex: 0,
+        pointerEvents: "none",
+        transition: "background 0.15s ease",
+      }}
+    />
+  );
 }
 
 // Eager loaded pages (critical path)
@@ -128,6 +170,7 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <CursorGlow />
           <ScrollToTop />
           <Toaster />
           <OfflineIndicator />
