@@ -358,8 +358,25 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
           <Input id="ev-date" type="date" value={form.date} onChange={e => set("date", e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="ev-time">Hora</Label>
-          <Input id="ev-time" type="time" value={form.time} onChange={e => set("time", e.target.value)} />
+          <Label>Hora</Label>
+          <div className="flex gap-2">
+            <Select value={form.time.split(":")[0] || "21"} onValueChange={v => set("time", v + ":" + (form.time.split(":")[1] || "00"))}>
+              <SelectTrigger className="flex-1"><SelectValue placeholder="HH" /></SelectTrigger>
+              <SelectContent>
+                {Array.from({length: 24}, (_, i) => String(i).padStart(2, "0")).map(h => (
+                  <SelectItem key={h} value={h}>{h}:00</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={form.time.split(":")[1] || "00"} onValueChange={v => set("time", (form.time.split(":")[0] || "21") + ":" + v)}>
+              <SelectTrigger className="w-24"><SelectValue placeholder="MM" /></SelectTrigger>
+              <SelectContent>
+                {["00","15","30","45"].map(m => (
+                  <SelectItem key={m} value={m}>:{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
