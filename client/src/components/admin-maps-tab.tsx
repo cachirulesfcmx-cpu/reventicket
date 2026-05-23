@@ -316,6 +316,10 @@ function ShapeEditor({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
+          onTouchStart={(e) => { e.preventDefault(); const t = e.touches[0]; handleMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => {} } as any); }}
+          onTouchMove={(e) => { e.preventDefault(); const t = e.touches[0]; handleMouseMove({ clientX: t.clientX, clientY: t.clientY } as any); }}
+          onTouchEnd={(e) => { e.preventDefault(); const t = e.changedTouches[0]; handleMouseUp({ clientX: t.clientX, clientY: t.clientY } as any); }}
+          style={{ touchAction: "none" }}
           onClick={() => { if (tool === "select") { setSelected(null); setEditPanel(null); } }}
         >
           {/* Saved sections */}
@@ -433,54 +437,92 @@ export function MapViewer({ map, onSelect }: { map: VenueMap; onSelect?: (s: Sec
 
   if (!map.imageUrl) return null;
 
+  // Con viewBox="0 0 100 100" + preserveAspectRatio="none", los valores 0-100
+  // corresponden exactamente al porcentaje del área del SVG → coordenadas correctas.
   const renderSec = (sec: Section) => {
     const isSel = sel?.id === sec.id;
     const fill = sec.color + (isSel ? "66" : "33");
-    const sw = isSel ? 3 : 1.5;
+    const sw = isSel ? 0.5 : 0.3;
     const click = (e: React.MouseEvent) => { e.stopPropagation(); setSel(sec); onSelect?.(sec); };
 
     let cx = 50, cy = 50;
     if (sec.shape === "polygon" && sec.points?.length) {
       cx = sec.points.reduce((s, p) => s + p.x, 0) / sec.points.length;
       cy = sec.points.reduce((s, p) => s + p.y, 0) / sec.points.length;
-    } else { cx = (sec.x||0)+(sec.w||0)/2; cy = (sec.y||0)+(sec.h||0)/2; }
+    } else {
+      cx = (sec.x || 0) + (sec.w || 0) / 2;
+      cy = (sec.y || 0) + (sec.h || 0) / 2;
+    }
 
+    // fontSize en unidades de viewBox (100x100): 2.5 ≈ 2.5% de la altura → ~10-12px en pantalla
     const label = (
       <>
-        <text x={`${cx}%`} y={`${cy}%`} textAnchor="middle" dominantBaseline="middle"
-          fontSize="11" fontWeight="700" fill="#fff" stroke="rgba(0,0,0,0.7)" strokeWidth="3" paintOrder="stroke">{sec.name}</text>
-        <text x={`${cx}%`} y={`${cy}%`} textAnchor="middle" dominantBaseline="middle"
-          fontSize="11" fontWeight="700" fill="#fff">{sec.name}</text>
-        <text x={`${cx}%`} y={`${cy+4}%`} textAnchor="middle" dominantBaseline="middle"
-          fontSize="10" fill={sec.color} fontWeight="600">${sec.price.toLocaleString()}</text>
+        <text x={cx} y={cy - 1} textAnchor="middle" dominantBaseline="middle"
+          fontSize="2.5" fontWeight="700" fill="#fff"
+          stroke="rgba(0,0,0,0.8)" strokeWidth="0.6" paintOrder="stroke">{sec.name}</text>
+        <text x={cx} y={cy - 1} textAnchor="middle" dominantBaseline="middle"
+          fontSize="2.5" fontWeight="700" fill="#fff">{sec.name}</text>
+        <text x={cx} y={cy + 2.5} textAnchor="middle" dominantBaseline="middle"
+          fontSize="2.2" fontWeight="600" fill={sec.color}>${sec.price.toLocaleString()}</text>
       </>
     );
 
     if (sec.shape === "polygon" && sec.points) {
-      return <g key={sec.id} style={{cursor:"pointer"}} onClick={click}>
-        <polygon points={sec.points.map(p=>`${p.x},${p.y}`).join(" ")} fill={fill} stroke={sec.color} strokeWidth={sw}/>{label}</g>;
+      const pts = sec.points.map(p => `${p.x},${p.y}`).join(" ");
+      return (
+        <g key={sec.id} style={{ cursor: "pointer" }} onClick={click}>
+          <polygon points={pts} fill={fill} stroke={sec.color} strokeWidth={sw} />
+          {label}
+        </g>
+      );
     }
     if (sec.shape === "ellipse") {
-      return <g key={sec.id} style={{cursor:"pointer"}} onClick={click}>
-        <ellipse cx={`${(sec.x||0)+(sec.w||0)/2}`} cy={`${(sec.y||0)+(sec.h||0)/2}`}
-          rx={`${(sec.w||0)/2}`} ry={`${(sec.h||0)/2}`} fill={fill} stroke={sec.color} strokeWidth={sw}/>{label}</g>;
+      return (
+        <g key={sec.id} style={{ cursor: "pointer" }} onClick={click}>
+          <ellipse
+            cx={(sec.x || 0) + (sec.w || 0) / 2}
+            cy={(sec.y || 0) + (sec.h || 0) / 2}
+            rx={(sec.w || 0) / 2}
+            ry={(sec.h || 0) / 2}
+            fill={fill} stroke={sec.color} strokeWidth={sw}
+          />
+          {label}
+        </g>
+      );
     }
-    return <g key={sec.id} style={{cursor:"pointer"}} onClick={click}>
-      <rect x={`${sec.x||0}`} y={`${sec.y||0}`} width={`${sec.w||0}`} height={`${sec.h||0}`}
-        fill={fill} stroke={sec.color} strokeWidth={sw} rx="4"/>{label}</g>;
+    // rect
+    return (
+      <g key={sec.id} style={{ cursor: "pointer" }} onClick={click}>
+        <rect
+          x={sec.x || 0} y={sec.y || 0}
+          width={sec.w || 0} height={sec.h || 0}
+          fill={fill} stroke={sec.color} strokeWidth={sw} rx="0.8"
+        />
+        {label}
+      </g>
+    );
   };
 
   return (
     <div className="space-y-3">
-      <div className="relative rounded-xl overflow-hidden border border-border">
+      <div className="relative rounded-xl overflow-hidden border border-border select-none">
         <img src={map.imageUrl} alt={map.name} className="w-full h-auto block" draggable={false} />
-        <svg ref={svgRef} className="absolute inset-0 w-full h-full" onClick={() => setSel(null)}>
+        {/* viewBox="0 0 100 100" mapea coords de porcentaje a user-units SVG */}
+        <svg
+          ref={svgRef}
+          className="absolute inset-0 w-full h-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          onClick={() => setSel(null)}
+        >
           {map.sections.map(renderSec)}
         </svg>
       </div>
       {sel && (
-        <div className="rounded-lg border p-3 flex items-center justify-between"
-          style={{ borderColor: sel.color+"55", background: sel.color+"11" }}>
+        <div
+          className="rounded-lg border p-3 flex items-center justify-between"
+          style={{ borderColor: sel.color + "55", background: sel.color + "11" }}
+        >
           <div>
             <p className="font-semibold text-sm">{sel.name}</p>
             <p className="text-xs text-muted-foreground">{sel.capacity.toLocaleString()} lugares</p>

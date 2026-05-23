@@ -66,9 +66,11 @@ export function useAuth() {
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
       const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+      const authToken  = typeof window !== "undefined" ? localStorage.getItem("auth_token")  : null;
+      const token = adminToken || authToken;
       const res = await fetch("/api/auth/me", {
         credentials: "include",
-        headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) return null;
       return res.json();

@@ -1,7 +1,9 @@
 import { AdminMapsTab } from "@/components/admin-maps-tab";
 import { AdminDiscountsTab } from "@/components/admin-discounts-tab";
+import { AdminPushCard } from "@/components/admin-push-card";
 import { NewEventModal } from "@/components/new-event-modal";
 import { Layout } from "@/components/layout";
+import { Link } from "wouter";
 import { useEvents, useVenues, useOrders, useDeleteEvent, useWhatsAppStatus } from "@/lib/api";
 import { QRCodeSVG } from "qrcode.react";
 import { 
@@ -27,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { 
-  BarChart, Users, Ticket, DollarSign, Settings, 
+  BarChart, Users, Ticket, DollarSign, Settings, TrendingUp,
   Map as MapIcon, Percent, CreditCard, Eye, Save, Trash2, Edit, Plus, Loader2, MessageCircle, CheckCircle2, XCircle
 } from "lucide-react";
 import { format } from "date-fns";
@@ -134,6 +136,20 @@ export default function Admin() {
                 <Settings className="h-4 w-4" />
                 Configuración
               </Button>
+              <div className="border-t border-border pt-2 mt-2">
+                <Link href="/portal-admin/analytics">
+                  <Button variant="ghost" className="w-full justify-start gap-2 text-primary" data-testid="nav-analytics">
+                    <TrendingUp className="h-4 w-4" />
+                    Analytics
+                  </Button>
+                </Link>
+                <Link href="/portal-admin/scanner">
+                  <Button variant="ghost" className="w-full justify-start gap-2" data-testid="nav-scanner">
+                    <Eye className="h-4 w-4" />
+                    Scanner QR
+                  </Button>
+                </Link>
+              </div>
             </nav>
           </div>
         </aside>
@@ -661,11 +677,16 @@ function KpiCard({ title, value, sub, icon: Icon }: { title: string; value: stri
 
 function WhatsAppTab() {
   const { data: status, isLoading } = useWhatsAppStatus();
-  
+
   return (
     <TabsContent value="whatsapp" className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-      <h2 className="text-xl font-bold">Bot de WhatsApp</h2>
-      
+      <h2 className="text-xl font-bold">Notificaciones</h2>
+
+      {/* Push Notifications */}
+      <AdminPushCard />
+
+      <h3 className="text-lg font-semibold mt-2">Bot de WhatsApp</h3>
+
       <div className="grid md:grid-cols-2 gap-8">
         <Card>
           <CardHeader>

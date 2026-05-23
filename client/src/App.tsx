@@ -10,6 +10,7 @@ import { AdminRoute } from "@/components/admin-route";
 import { InstallPrompt } from "@/components/install-prompt";
 import { SkeletonShimmer } from "@/components/skeleton-shimmer";
 import { OfflineIndicator } from "@/components/offline-indicator";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -124,15 +125,17 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <ScrollToTop />
-        <Toaster />
-        <OfflineIndicator />
-        <Router />
-        <InstallPrompt />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <ScrollToTop />
+          <Toaster />
+          <OfflineIndicator />
+          <Router />
+          <InstallPrompt />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

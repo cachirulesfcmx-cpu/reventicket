@@ -32,6 +32,14 @@ import { isFeatureEnabled } from "./lib/feature-flags";
 
 import { paymentsRouter } from "./routes/payments";
 import { settingsRouter } from "./routes/settings";
+import {
+  ensurePushTable,
+  saveSubscription,
+  removeSubscription,
+  sendPushToAdmins,
+  vapidPublicKey,
+  pushEnabled,
+} from "./lib/push-notifications";
 
 
 declare module "express-session" {
@@ -70,8 +78,8 @@ export async function registerRoutes(
       cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 7,
         httpOnly: true,
-        secure: true,
-        sameSite: "none",
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
       },
     })
   );
@@ -88,6 +96,11 @@ export async function registerRoutes(
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // VAPID public key (no auth needed — es pública por diseño)
+  app.get("/api/push/vapid-public-key", (_req, res) => {
+    res.json({ publicKey: vapidPublicKey, enabled: pushEnabled });
   });
 
   // Auth middleware
@@ -148,6 +161,31 @@ export async function registerRoutes(
     req.user = user;
     next();
   };
+
+  // ── Push Notification Routes (protected) ─────────────────────────────────
+  app.post("/api/push/subscribe", requireAdmin, async (req: any, res) => {
+    try {
+      const { subscription } = req.body;
+      if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+        return res.status(400).json({ error: "Suscripción inválida" });
+      }
+      const userId = req.session?.userId || req.user?.id;
+      await saveSubscription(userId, subscription, "admin");
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/push/unsubscribe", requireAdmin, async (req: any, res) => {
+    try {
+      const { endpoint } = req.body;
+      if (endpoint) await removeSubscription(endpoint);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // ===== Map Viewer Routes =====
   const fs = await import('fs');
@@ -330,18 +368,22 @@ export async function registerRoutes(
     });
   });
 
-  app.get("/api/auth/me", requireAuth, async (req, res) => {
+  app.get("/api/auth/me", requireAuth, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.session.userId!);
+      const userId = req.session?.userId || req.user?.id;
+      if (!userId) return res.status(401).json({ error: "No autorizado" });
+
+      const user = await storage.getUser(userId);
       if (!user) {
+        // Si el usuario fue creado por OTP y no está en BD, retornar 401 sin error 500
         return res.status(404).json({ error: "Usuario no encontrado" });
       }
-      res.json({ 
-        id: user.id, 
-        email: user.email, 
-        firstName: user.firstName, 
+      res.json({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role 
+        role: user.role,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Error al obtener usuario" });
@@ -748,9 +790,19 @@ export async function registerRoutes(
       await storage.createOtpCode({ phone, code, expiresAt });
 
       const sent = await whatsappService.sendOTP(phone, code);
-      
+
+      // En modo dev (sin WhatsApp), devolver el código en la respuesta para facilitar pruebas
+      if (!sent && !isProduction) {
+        console.log(`[DEV] OTP para ${phone}: ${code}`);
+        return res.json({
+          success: true,
+          message: "Código generado (modo dev — WhatsApp no conectado)",
+          devCode: code, // Solo visible en desarrollo
+        });
+      }
+
       if (!sent) {
-        return res.status(500).json({ error: "No se pudo enviar el código. Verifica que WhatsApp esté conectado." });
+        return res.status(500).json({ error: "No se pudo enviar el código. Verifica que WhatsApp esté conectado en el panel admin." });
       }
 
       res.json({ success: true, message: "Código enviado por WhatsApp" });
@@ -767,13 +819,44 @@ export async function registerRoutes(
       }
 
       const otpRecord = await storage.getValidOtpCode(phone, code);
-      
+
       if (!otpRecord) {
         return res.status(400).json({ error: "Código inválido o expirado" });
       }
 
       await storage.markOtpVerified(otpRecord.id);
-      res.json({ success: true, verified: true });
+
+      // Buscar o crear usuario por teléfono (email sintético)
+      const phoneEmail = `${phone}@reventicket.mx`;
+      let user = await storage.getUserByEmail(phoneEmail);
+      if (!user) {
+        // Usuario nuevo — crear con datos mínimos
+        const randomPw = Math.random().toString(36) + Date.now().toString(36);
+        const hashedPw = await bcrypt.hash(randomPw, 10);
+        user = await storage.createUser({
+          email: phoneEmail,
+          password: hashedPw,
+          firstName: "Usuario",
+          lastName: phone.slice(-4), // últimos 4 dígitos como apellido temporal
+          role: "buyer",
+        });
+      }
+
+      // Crear sesión
+      req.session.userId = user.id;
+      await new Promise<void>((resolve, reject) =>
+        req.session.save((err) => (err ? reject(err) : resolve()))
+      );
+
+      // También devolver JWT para clientes que lo prefieran
+      const token = signToken({ userId: user.id, role: user.role });
+
+      res.json({
+        success: true,
+        verified: true,
+        user: { id: user.id, role: user.role, firstName: user.firstName },
+        token,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Error al verificar OTP" });
     }
@@ -809,15 +892,78 @@ export async function registerRoutes(
   // ===== Extended Orders with WhatsApp =====
   app.post("/api/orders/complete", requireAuth, checkoutLimiter, async (req, res) => {
     try {
-      const { ticketId, totalAmount, fees, paymentMethod, phone, eventId } = req.body;
-      
+      const { ticketId, zoneId, quantity, totalAmount, fees, paymentMethod, phone, eventId } = req.body;
+      const userId = req.session.userId!;
+
+      // ── Compra multi-boleto (por zona + cantidad) ──────────────────────────
+      if (!ticketId && zoneId && quantity && quantity > 1) {
+        const qty = Math.min(parseInt(quantity, 10), 4);
+        const orders = [];
+        const purchasedTickets = [];
+
+        for (let i = 0; i < qty; i++) {
+          const result = await storage.atomicPurchaseByZone(eventId, zoneId, userId, {
+            status: paymentMethod === 'card' ? 'paid' : 'pending',
+            paymentMethod,
+            phone,
+          });
+          if (!result.success) {
+            // Si falla alguno, los anteriores ya están reservados — continúa con los que se pudieron
+            break;
+          }
+          orders.push(result.order!);
+          purchasedTickets.push(result.ticket!);
+          if (paymentMethod === 'card') {
+            await storage.updateTicketStatus(result.ticket!.id, 'sold');
+          }
+        }
+
+        if (orders.length === 0) {
+          return res.status(409).json({ error: "No hay boletos disponibles en esta zona" });
+        }
+
+        // Notificaciones para multi-boleto
+        const event = await storage.getEvent(eventId);
+        const venue = event ? await storage.getVenue(event.venueId) : null;
+        const zone = await storage.getZone(zoneId);
+        const firstOrder = orders[0];
+        const firstTicket = purchasedTickets[0];
+
+        if (phone && event && venue) {
+          const eventDate = format(new Date(event.date), "EEEE dd 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es });
+          await whatsappService.sendOrderConfirmation(phone, {
+            orderId: firstOrder.id,
+            eventTitle: event.title,
+            eventDate,
+            venue: venue.name,
+            zone: zone?.name || 'General',
+            row: `${firstTicket.row}–${purchasedTickets[purchasedTickets.length-1].row}`,
+            seat: `${orders.length} boletos`,
+            total: totalAmount,
+            paymentMethod: paymentMethod === 'card' ? 'Tarjeta' : paymentMethod === 'oxxo' ? 'OXXO' : 'SPEI'
+          });
+        }
+
+        // Notificación admin
+        const adminPhone = process.env.ADMIN_WHATSAPP_PHONE;
+        if (adminPhone && whatsappService.isEnabled()) {
+          const msg = `🎉 *NUEVA VENTA (${orders.length} boletos) — RevenTicket*\n\n` +
+            `🎪 ${event?.title || "—"}\n💰 Total: $${totalAmount} MXN\n📱 ${phone || "—"}`;
+          await whatsappService.sendMessage(adminPhone, msg).catch(() => {});
+        }
+        sendPushToAdmins({ title: `💰 ${orders.length} boletos — $${totalAmount} MXN`, body: event?.title || "", url: "/portal-admin/dashboard", tag: `order-multi-${firstOrder.id}` }).catch(() => {});
+
+        return res.json({ id: firstOrder.id, orders: orders.map(o => o.id), count: orders.length });
+      }
+
+      // ── Compra de boleto único ─────────────────────────────────────────────
       if (!ticketId) {
         return res.status(400).json({ error: "ID de boleto requerido" });
       }
 
       const result = await storage.atomicPurchaseTicket(
         ticketId,
-        req.session.userId!,
+        userId,
         {
           totalAmount,
           fees,
@@ -833,9 +979,13 @@ export async function registerRoutes(
 
       const order = result.order!;
       const ticket = result.ticket!;
-      
+
       if (paymentMethod === 'card') {
         await storage.updateTicketStatus(ticketId, 'sold');
+        // Crear wallet pass automáticamente en pago con tarjeta
+        createPassesForOrder(order.id, userId).catch(e =>
+          console.error("[Wallet] Error creando passes:", e)
+        );
       }
 
       // Get event and venue details for WhatsApp message
@@ -882,6 +1032,36 @@ export async function registerRoutes(
           await storage.createPaymentReminder({ orderId: order.id, hoursAfter: 12 });
         }
       }
+
+      // ── Notificaciones al admin (WhatsApp + Push) ─────────────────────────
+      const adminPhoneCard = process.env.ADMIN_WHATSAPP_PHONE;
+      const eventTitle = event?.title || "—";
+      const payLabel = paymentMethod === 'card' ? 'Tarjeta ✅' : paymentMethod === 'oxxo' ? 'OXXO (pendiente)' : 'SPEI (pendiente)';
+
+      // WhatsApp al admin
+      if (adminPhoneCard && whatsappService.isEnabled()) {
+        try {
+          const adminMsgCard =
+            `🎉 *NUEVA VENTA — RevenTicket*\n\n` +
+            `📋 Orden: #${order.id.slice(0, 8)}\n` +
+            `🎪 Evento: ${eventTitle}\n` +
+            `💰 Total: $${totalAmount} MXN\n` +
+            `💳 Pago: ${payLabel}\n` +
+            `📱 Cliente: ${phone || "—"}\n` +
+            `🕐 ${new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" })}`;
+          await whatsappService.sendMessage(adminPhoneCard, adminMsgCard);
+        } catch (notifErr) {
+          console.error("[Admin WA] Error notificando al admin:", notifErr);
+        }
+      }
+
+      // Push al admin
+      sendPushToAdmins({
+        title: `💰 Nueva venta — $${totalAmount} MXN`,
+        body: `${eventTitle} · ${payLabel} · Orden #${order.id.slice(0, 8)}`,
+        url: "/portal-admin/dashboard",
+        tag: `order-${order.id}`,
+      }).catch((e) => console.error("[PushNotif] Error enviando push:", e));
 
       res.json(order);
     } catch (error: any) {
@@ -1097,6 +1277,7 @@ export async function registerRoutes(
         const event = ticket ? await storage.getEvent(ticket.eventId) : null;
         
         if (event) {
+          // WhatsApp al comprador
           await whatsappService.sendPaymentConfirmed(order.phone, {
             orderId: order.id,
             eventTitle: event.title,
@@ -1105,7 +1286,37 @@ export async function registerRoutes(
         }
       }
 
-      res.json({ 
+      // ── Notificaciones al admin (WhatsApp + Push) ───────────────────────
+      const adminPhone = process.env.ADMIN_WHATSAPP_PHONE;
+      const confTicket = order.ticketId ? await storage.getTicket(order.ticketId) : null;
+      const confEvent  = confTicket ? await storage.getEvent(confTicket.eventId) : null;
+      const confTitle  = confEvent?.title || "—";
+
+      if (adminPhone && whatsappService.isEnabled()) {
+        try {
+          const adminMsg =
+            `✅ *PAGO CONFIRMADO — RevenTicket*\n\n` +
+            `📋 Orden: #${order.id.slice(0, 8)}\n` +
+            `🎪 Evento: ${confTitle}\n` +
+            `💰 Total: $${order.totalAmount} MXN\n` +
+            `💳 Método: ${order.paymentMethod || "—"}\n` +
+            `📱 Cliente: ${order.phone || "—"}\n` +
+            `🕐 ${new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" })}`;
+          await whatsappService.sendMessage(adminPhone, adminMsg);
+        } catch (notifErr) {
+          console.error("[Admin WA] Error enviando notificación al admin:", notifErr);
+        }
+      }
+
+      // Push al admin
+      sendPushToAdmins({
+        title: `✅ Pago confirmado — $${order.totalAmount} MXN`,
+        body: `${confTitle} · Orden #${order.id.slice(0, 8)}`,
+        url: "/portal-admin/dashboard",
+        tag: `confirm-${order.id}`,
+      }).catch((e) => console.error("[PushNotif] Error enviando push:", e));
+
+      res.json({
         success: true,
         status: 'payment_confirmed',
         order: result.order,
@@ -1387,6 +1598,9 @@ export async function registerRoutes(
     console.log("WhatsApp deshabilitado (WHATSAPP_ENABLED !== 'true')");
   }
 
+  // Initialize push notifications table
+  ensurePushTable().catch((e) => console.error("[PushNotif] Error creando tabla:", e));
+
   // Background jobs only if enabled
   if (JOBS_ENABLED) {
     console.log(`Jobs de fondo habilitados, iniciando intervalos... (instance: ${getInstanceId()})`);
@@ -1456,6 +1670,69 @@ export async function registerRoutes(
         const expiredCount = await storage.expireReservedTicketsWithAudit(15);
         if (expiredCount > 0) {
           console.log(`Expired ${expiredCount} reserved tickets`);
+        }
+
+        // ── Job: enviar boleto 24h antes del evento ───────────────────────
+        if (WHATSAPP_ENABLED && whatsappService.isEnabled()) {
+          try {
+            const frontendUrl = process.env.FRONTEND_URL || "https://reventicket.up.railway.app";
+            const now = new Date();
+            const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            const in25h = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+
+            // Aseguramos la columna existe (idempotente)
+            await pool.query(`
+              ALTER TABLE orders ADD COLUMN IF NOT EXISTS ticket_notified_at TIMESTAMP;
+            `);
+
+            const result = await pool.query<{
+              order_id: string; phone: string; total_amount: string;
+              ticket_id: string; row: string; seat: string; price: string;
+              event_title: string; event_date: Date;
+              venue_name: string; venue_city: string; zone_name: string;
+            }>(
+              `SELECT o.id as order_id, o.phone, o.total_amount,
+                      t.id as ticket_id, t.row, t.seat, t.price,
+                      e.title as event_title, e.date as event_date,
+                      v.name as venue_name, v.city as venue_city,
+                      z.name as zone_name
+               FROM orders o
+               JOIN tickets t ON t.id = o.ticket_id
+               JOIN events e ON e.id = t.event_id
+               JOIN venues v ON v.id = e.venue_id
+               JOIN zones  z ON z.id = t.zone_id
+               WHERE o.status = 'paid'
+                 AND e.date BETWEEN $1 AND $2
+                 AND o.ticket_notified_at IS NULL
+                 AND o.phone IS NOT NULL`,
+              [in24h, in25h]
+            );
+
+            for (const row of result.rows) {
+              const eventDate = format(new Date(row.event_date), "EEEE dd 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es });
+              const sent = await whatsappService.sendTicket24hBefore(row.phone, {
+                orderId: row.order_id,
+                eventTitle: row.event_title,
+                eventDate,
+                venue: row.venue_name,
+                city: row.venue_city,
+                zone: row.zone_name,
+                row: row.row,
+                seat: row.seat,
+                price: row.price,
+                walletUrl: `${frontendUrl}/wallet`,
+              });
+              if (sent) {
+                await pool.query(
+                  `UPDATE orders SET ticket_notified_at = NOW() WHERE id = $1`,
+                  [row.order_id]
+                );
+                console.log(`[24h Job] Boleto enviado a ${row.phone} para orden ${row.order_id}`);
+              }
+            }
+          } catch (jobErr) {
+            console.error("[24h Job] Error enviando boletos:", jobErr);
+          }
         }
       } catch (error) {
         console.error("Error in background job:", error);

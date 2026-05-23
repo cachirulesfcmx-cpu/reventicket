@@ -11,7 +11,7 @@ export function Layout({ children, hideNav = false }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-background font-sans flex flex-col">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur" style={{ WebkitBackdropFilter: "blur(12px)", backdropFilter: "blur(12px)" }}>
         <div className="container mx-auto px-4 h-14 flex items-center justify-between gap-4">
           
           {/* Mobile Menu & Logo */}

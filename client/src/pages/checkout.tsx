@@ -31,19 +31,64 @@ export default function Checkout() {
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [includeCancellationInsurance, setIncludeCancellationInsurance] = useState(false);
 
+  // ── Countdown timer (10 min reservation) ──────────────────────────────────
+  const RESERVATION_SECONDS = 10 * 60;
+  const [timeLeft, setTimeLeft] = useState(RESERVATION_SECONDS);
+  const [timerExpired, setTimerExpired] = useState(false);
+
+  useEffect(() => {
+    if (step === 3) return; // Compra completada, no expira
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setTimerExpired(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [step]);
+
+  useEffect(() => {
+    if (timerExpired && step < 3) {
+      toast({
+        title: "Tiempo agotado",
+        description: "Tu reserva expiró. El boleto fue liberado.",
+        variant: "destructive",
+      });
+      setTimeout(() => setLocation(`/event/${eventId}`), 1500);
+    }
+  }, [timerExpired]);
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
   const urlParams = new URLSearchParams(window.location.search);
   const ticketId = urlParams.get("ticketId") || "";
   const eventId = urlParams.get("eventId") || "";
-  
+  const zoneId = urlParams.get("zoneId") || "";
+  const quantity = parseInt(urlParams.get("quantity") || "1", 10);
+  const isMultiTicket = quantity > 1 && !!zoneId;
+
   const { data: event } = useEvent(eventId);
   const { data: venue } = useVenue(event?.venueId || "");
   const { data: ticket } = useTicket(ticketId);
-  
+
+  // Para multi-ticket, recuperamos info de la zona
+  const { data: zones } = isMultiTicket
+    ? { data: undefined } as any
+    : { data: undefined };
+
   const zoneName = ticket?.section || "General";
-  const ticketPrice = ticket ? parseFloat(ticket.price) : 0;
-  const fees = ticketPrice * 0.15;
-  const insuranceCost = includeCancellationInsurance ? ticketPrice * 0.18 : 0;
-  const total = ticketPrice + fees + insuranceCost;
+  const ticketPrice = ticket ? parseFloat(ticket.price) : (event?.minPrice ? parseFloat(event.minPrice) : 0);
+  const fees = ticketPrice * 0.15 * quantity;
+  const insuranceCost = includeCancellationInsurance ? ticketPrice * quantity * 0.18 : 0;
+  const total = ticketPrice * quantity + fees + insuranceCost;
 
   const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -71,10 +116,16 @@ export default function Checkout() {
 
     setSendingOtp(true);
     try {
-      const response = await apiRequest("POST", "/api/otp/send", { phone: `52${phone}` });
+      const response = await apiRequest<any>("POST", "/api/otp/send", { phone: `52${phone}` });
       if (response.success) {
         setOtpSent(true);
-        toast({ title: "Código enviado", description: "Revisa tu WhatsApp para ver el código" });
+        // Modo dev: auto-rellenar código
+        if (response.devCode) {
+          setOtpCode(String(response.devCode));
+          toast({ title: "Modo dev — código auto-rellenado", description: `Código: ${response.devCode}` });
+        } else {
+          toast({ title: "Código enviado", description: "Revisa tu WhatsApp para ver el código" });
+        }
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "No se pudo enviar el código", variant: "destructive" });
@@ -91,9 +142,11 @@ export default function Checkout() {
 
     setVerifyingOtp(true);
     try {
-      const response = await apiRequest("POST", "/api/otp/verify", { phone: `52${phone}`, code: otpCode });
-      if (response.verified) {
+      const response = await apiRequest<any>("POST", "/api/otp/verify", { phone: `52${phone}`, code: otpCode });
+      if (response.verified || response.success) {
         setOtpVerified(true);
+        // Guardar token de sesión si el servidor lo devuelve
+        if (response.token) localStorage.setItem("auth_token", response.token);
         toast({ title: "Verificado", description: "Tu número ha sido verificado correctamente" });
       }
     } catch (error: any) {
@@ -108,14 +161,20 @@ export default function Checkout() {
   const handlePayment = async () => {
     setLoading(true);
     try {
-      const response = await apiRequest("POST", "/api/orders/complete", {
-        ticketId,
+      const payload: any = {
         eventId,
         totalAmount: total.toFixed(2),
         fees: fees.toFixed(2),
         paymentMethod,
-        phone: `52${phone}`
-      });
+        phone: `52${phone}`,
+      };
+      if (isMultiTicket) {
+        payload.zoneId = zoneId;
+        payload.quantity = quantity;
+      } else {
+        payload.ticketId = ticketId;
+      }
+      const response = await apiRequest("POST", "/api/orders/complete", payload);
 
       if (response.id) {
         setStep(3);
@@ -465,9 +524,17 @@ export default function Checkout() {
                 </CardContent>
               </Card>
               
-              <div className="flex items-start gap-2 text-xs text-muted-foreground p-2">
+              <div className={`flex items-center gap-2 text-xs p-2 rounded-lg font-medium transition-colors ${
+                timerExpired ? "bg-destructive/10 text-destructive" :
+                timeLeft < 120 ? "bg-orange-500/10 text-orange-500" :
+                "text-muted-foreground"
+              }`}>
                 <Clock className="h-4 w-4 shrink-0" />
-                <p>Los boletos están reservados por 10:00 minutos. Completa tu compra antes de que sean liberados.</p>
+                <span>
+                  {timerExpired
+                    ? "⚠️ Reserva expirada — redirigiendo..."
+                    : `Boleto reservado por ${formatTime(timeLeft)} min. Completa tu compra antes de que sea liberado.`}
+                </span>
               </div>
             </div>
           </div>

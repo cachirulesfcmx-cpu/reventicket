@@ -116,3 +116,63 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
+// ── Push Notifications ─────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let payload = {
+    title: 'RevenTicket',
+    body: 'Nueva notificación',
+    icon: '/favicon.png',
+    url: '/portal-admin/dashboard',
+    tag: 'reventicket-notif',
+  };
+
+  try {
+    Object.assign(payload, event.data.json());
+  } catch {
+    payload.body = event.data.text();
+  }
+
+  const options = {
+    body: payload.body,
+    icon: payload.icon || '/favicon.png',
+    badge: '/favicon.png',
+    tag: payload.tag,
+    data: { url: payload.url },
+    vibrate: [200, 100, 200],
+    requireInteraction: true,
+    actions: [
+      { action: 'open', title: 'Ver panel' },
+      { action: 'close', title: 'Cerrar' },
+    ],
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, options)
+  );
+});
+
+// Al hacer clic en la notificación → abrir / enfocar el panel admin
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  if (event.action === 'close') return;
+
+  const url = event.notification.data?.url || '/portal-admin/dashboard';
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        for (const client of clients) {
+          if ('focus' in client) {
+            client.focus();
+            if ('navigate' in client) client.navigate(url);
+            return;
+          }
+        }
+        return self.clients.openWindow(url);
+      })
+  );
+});

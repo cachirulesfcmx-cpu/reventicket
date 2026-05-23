@@ -2,35 +2,37 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    let message = res.statusText;
+    try {
+      const json = await res.clone().json();
+      message = json.error || json.message || message;
+    } catch {
+      try { message = await res.text() || message; } catch {}
+    }
+    const error = new Error(message) as Error & { status: number };
+    error.status = res.status;
+    throw error;
   }
 }
 
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  await throwIfResNotOk(res);
-  return res;
+/** Helper para incluir siempre el token admin si existe */
+function getAuthHeaders(): Record<string, string> {
+  const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  const authToken  = typeof window !== "undefined" ? localStorage.getItem("auth_token")  : null;
+  const token = adminToken || authToken;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
+
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetch(queryKey[0] as string, {
       credentials: "include",
+      headers: getAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -44,10 +46,10 @@ export const getQueryFn: <T>(options: {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
+      queryFn: getQueryFn({ on401: "returnNull" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 1000 * 60 * 2, // 2 min — permite revalidación sin ser agresivo
       retry: false,
     },
     mutations: {

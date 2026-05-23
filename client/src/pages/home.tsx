@@ -1,6 +1,6 @@
 import { Layout } from "@/components/layout";
 import { Link, useLocation } from "wouter";
-import { MapPin, ChevronRight, X, RefreshCw, Heart, Calendar } from "lucide-react";
+import { MapPin, ChevronRight, X, RefreshCw, Heart, Calendar, Search } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEvents, useVenues, type Event as APIEvent } from "@/lib/api";
@@ -362,6 +362,7 @@ export default function Home() {
   const { data: events, isLoading, refetch, isFetching } = useEvents();
   const { data: venues } = useVenues();
   const [, navigate] = useLocation();
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
@@ -446,6 +447,42 @@ export default function Home() {
         {events && events.length > 0 && (
           <HeroSlider events={events} venues={venues || []} onEventClick={handleEventClick} />
         )}
+
+        {/* ── SEARCH BAR ── */}
+        <div style={{ padding: "14px 14px 0" }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (searchQuery.trim()) navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+            }}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              background: "rgba(255,255,255,0.07)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 16, padding: "10px 14px",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <Search style={{ width: 18, height: 18, color: "rgba(255,255,255,0.45)", flexShrink: 0 }} />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Artista, evento, equipo..."
+              style={{
+                flex: 1, background: "transparent", border: "none", outline: "none",
+                color: "#fff", fontSize: 15, fontFamily: "inherit",
+              }}
+              data-testid="home-search-input"
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery("")}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", padding: 0 }}>
+                <X style={{ width: 16, height: 16 }} />
+              </button>
+            )}
+          </form>
+        </div>
 
         {/* ── CATEGORY CIRCLES ── */}
         <CategoryCircles active={activeCategory} onChange={setActiveCategory} />

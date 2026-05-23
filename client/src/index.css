@@ -51,4 +51,85 @@
 }
 
 * { border-color: hsl(var(--border)); }
-body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); }
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  /* Prevenir rebote en iOS Safari */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Safari / WebKit compatibility ─────────────────────────────────────────── */
+
+/* backdrop-filter con prefijo webkit para Safari < 15 */
+.backdrop-blur,
+[class*="backdrop-blur"] {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* Arreglar sticky header en Safari iOS */
+.sticky {
+  position: -webkit-sticky;
+  position: sticky;
+}
+
+/* Scroll suave en contenedores en iOS */
+.overflow-y-auto,
+.overflow-y-scroll,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Quitar tap highlight en iOS */
+a, button, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Evitar zoom en inputs en iOS (mínimo 16px de font-size) */
+input, select, textarea {
+  font-size: max(16px, 1em);
+}
+
+/* Arreglar border-radius en Safari para imágenes */
+img {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Animaciones: usar transform3d para activar GPU en Safari */
+.animate-spin {
+  -webkit-animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
+}
+
+/* Asegurar que el color correcto se muestre en botones en iOS Safari */
+button, input[type="submit"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ── Safe area insets (iPhone con notch) ────────────────────────────────────── */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ── Scrollbar styling (Chrome + Safari 14+) ──────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}

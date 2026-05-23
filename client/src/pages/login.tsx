@@ -63,14 +63,25 @@ export default function Login() {
     setIsLoading(true);
     try {
       const fullPhone = `52${phone}`;
-      await apiRequest("POST", "/api/otp/send", { phone: fullPhone });
+      const result = await apiRequest<any>("POST", "/api/otp/send", { phone: fullPhone });
       vibrateTap();
       setStep("otp");
       startCountdown();
-      toast({
-        title: "Código enviado",
-        description: "Revisa tu WhatsApp para el código de verificación",
-      });
+
+      // Modo dev: auto-rellenar el código si el servidor lo devuelve
+      if (result?.devCode) {
+        const digits = String(result.devCode).split("");
+        setOtp(digits);
+        toast({
+          title: "Modo dev — código auto-rellenado",
+          description: `Código: ${result.devCode}`,
+        });
+      } else {
+        toast({
+          title: "Código enviado",
+          description: "Revisa tu WhatsApp para el código de verificación",
+        });
+      }
     } catch (error: any) {
       vibrateError();
       toast({
@@ -111,11 +122,16 @@ export default function Login() {
     setIsLoading(true);
     try {
       const fullPhone = `52${phone}`;
-      await apiRequest("POST", "/api/otp/verify", { phone: fullPhone, code });
-      
+      const result = await apiRequest<any>("POST", "/api/otp/verify", { phone: fullPhone, code });
+
+      // Guardar JWT si el servidor lo devuelve (para futuras requests autenticadas)
+      if (result?.token) {
+        localStorage.setItem("auth_token", result.token);
+      }
+
       vibrateSuccess();
       setStep("success");
-      
+
       setTimeout(() => {
         toast({
           title: "¡Bienvenido!",

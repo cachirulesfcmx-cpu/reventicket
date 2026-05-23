@@ -3,10 +3,10 @@ import { Home, Search, Ticket, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/",        icon: Home,   label: "Inicio"      },
-  { href: "/search",  icon: Search, label: "Buscar"      },
-  { href: "/profile", icon: Ticket, label: "Mis compras" },
-  { href: "/login",   icon: User,   label: "Cuenta"      },
+  { href: "/",       icon: Home,   label: "Inicio"      },
+  { href: "/search", icon: Search, label: "Buscar"      },
+  { href: "/wallet", icon: Ticket, label: "Mis Boletos" },
+  { href: "/login",  icon: User,   label: "Cuenta"      },
 ];
 
 export function BottomNav() {

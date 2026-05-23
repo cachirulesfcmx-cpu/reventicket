@@ -3,7 +3,7 @@ import { useState } from "react";
 import { SimpleMapViewer } from "@/components/simple-map-viewer";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +26,7 @@ export default function EventDetails() {
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   const filteredTickets = selectedZone 
     ? tickets?.filter(t => t.zoneId === selectedZone) || []
@@ -49,7 +50,12 @@ export default function EventDetails() {
   };
 
   const proceedToCheckout = () => {
-    setLocation(`/checkout?ticketId=${selectedTicket?.id}&eventId=${event?.id}`);
+    if (selectedTicket && quantity === 1) {
+      setLocation(`/checkout?ticketId=${selectedTicket.id}&eventId=${event?.id}`);
+    } else if (selectedTicket && quantity > 1) {
+      // Multi-ticket: usa zoneId para que el backend asigne boletos disponibles
+      setLocation(`/checkout?zoneId=${selectedTicket.zoneId}&eventId=${event?.id}&quantity=${quantity}`);
+    }
   };
 
   if (eventLoading) {
@@ -173,29 +179,66 @@ export default function EventDetails() {
               Estás a punto de comprar este boleto
             </DialogDescription>
           </DialogHeader>
-          {selectedTicket && (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="font-bold text-lg" style={{ color: zones?.find(z => z.id === selectedTicket.zoneId)?.color || undefined }}>
-                  {zones?.find(z => z.id === selectedTicket.zoneId)?.name}
+          {selectedTicket && (() => {
+            const zone = zones?.find(z => z.id === selectedTicket.zoneId);
+            const unitPrice = parseFloat(selectedTicket.price);
+            const availableInZone = tickets?.filter(t => t.zoneId === selectedTicket.zoneId && t.status === "available").length || 1;
+            const maxQty = Math.min(4, availableInZone);
+            const subtotal = unitPrice * quantity;
+            return (
+              <div className="space-y-4">
+                <div className="p-4 bg-muted rounded-lg">
+                  <div className="font-bold text-lg" style={{ color: zone?.color || undefined }}>
+                    {zone?.name}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Fila {selectedTicket.row} | Asiento {selectedTicket.seat}
+                  </div>
+                  <div className="text-2xl font-bold text-green-600 mt-2">
+                    ${unitPrice.toLocaleString("es-MX")} MXN <span className="text-sm font-normal text-muted-foreground">/ boleto</span>
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  Fila {selectedTicket.row} | Asiento {selectedTicket.seat}
+
+                {/* Selector de cantidad */}
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <span className="font-medium text-sm">Cantidad de boletos</span>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline" size="icon" className="h-8 w-8"
+                      onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                      disabled={quantity <= 1}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="font-bold w-4 text-center">{quantity}</span>
+                    <Button
+                      variant="outline" size="icon" className="h-8 w-8"
+                      onClick={() => setQuantity(q => Math.min(maxQty, q + 1))}
+                      disabled={quantity >= maxQty}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="text-2xl font-bold text-green-600 mt-2">
-                  ${parseFloat(selectedTicket.price).toLocaleString("es-MX")} MXN
+
+                {quantity > 1 && (
+                  <div className="flex justify-between text-sm font-semibold px-1">
+                    <span>Subtotal ({quantity} boletos)</span>
+                    <span className="text-green-600">${subtotal.toLocaleString("es-MX")} MXN</span>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1" onClick={() => { setIsCheckoutOpen(false); setQuantity(1); }}>
+                    Cancelar
+                  </Button>
+                  <Button className="flex-1" onClick={proceedToCheckout}>
+                    Ir a pagar →
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setIsCheckoutOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button className="flex-1" onClick={proceedToCheckout}>
-                  Continuar
-                </Button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

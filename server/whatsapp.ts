@@ -181,7 +181,7 @@ class WhatsAppService {
     total: string;
     paymentMethod: string;
   }): Promise<boolean> {
-    const confirmationMessage = `🎉 *RevenTicket - Pedido Confirmado*\n\n📋 *Pedido #${orderDetails.orderId.slice(0, 8)}*\n\n🎪 *${orderDetails.eventTitle}*\n📅 ${orderDetails.eventDate}\n📍 ${orderDetails.venue}\n\n🎟️ *Tu boleto:*\n• Zona: ${orderDetails.zone}\n• Fila: ${orderDetails.row}\n• Asiento: ${orderDetails.seat}\n\n💰 *Total: $${orderDetails.total} MXN*\n💳 Método: ${orderDetails.paymentMethod}\n\n¡Gracias por tu compra!`;
+    const confirmationMessage = `🎉 *RevenTicket - Pedido Confirmado*\n\n📋 *Pedido #${orderDetails.orderId.slice(0, 8)}*\n\n🎪 *${orderDetails.eventTitle}*\n📅 ${orderDetails.eventDate}\n📍 ${orderDetails.venue}\n\n🎟️ *Tu boleto:*\n• Zona: ${orderDetails.zone}\n• Fila: ${orderDetails.row}\n• Asiento: ${orderDetails.seat}\n\n💰 *Total: $${orderDetails.total} MXN*\n💳 Método: ${orderDetails.paymentMethod}\n\n📲 *Tu boleto digital con código QR te llegará 24 horas antes del evento a este WhatsApp.*\n\n¡Gracias por tu compra! 🙌`;
     
     const sent = await this.sendMessage(phone, confirmationMessage);
     
@@ -205,7 +205,34 @@ class WhatsAppService {
     eventTitle: string;
     total: string;
   }): Promise<boolean> {
-    const message = `✅ *RevenTicket - Pago Confirmado*\n\n¡Tu pago ha sido procesado exitosamente!\n\n📋 Pedido: #${orderDetails.orderId.slice(0, 8)}\n🎪 Evento: ${orderDetails.eventTitle}\n💰 Total: $${orderDetails.total} MXN\n\nTus boletos ya están listos. ¡Disfruta el evento! 🎉`;
+    const message = `✅ *RevenTicket - Pago Confirmado*\n\n¡Tu pago ha sido procesado exitosamente!\n\n📋 Pedido: #${orderDetails.orderId.slice(0, 8)}\n🎪 Evento: ${orderDetails.eventTitle}\n💰 Total: $${orderDetails.total} MXN\n\n🎟️ Tu boleto digital estará disponible en tu cuenta y te lo enviaremos *24 horas antes del evento* a este WhatsApp.\n\n¡Disfruta el evento! 🎉`;
+    return this.sendMessage(phone, message);
+  }
+
+  async sendTicket24hBefore(phone: string, details: {
+    orderId: string;
+    eventTitle: string;
+    eventDate: string;
+    venue: string;
+    city: string;
+    zone: string;
+    row: string;
+    seat: string;
+    price: string;
+    walletUrl: string;
+  }): Promise<boolean> {
+    const message =
+      `🎟️ *¡Tu boleto para mañana!*\n\n` +
+      `🎪 *${details.eventTitle}*\n` +
+      `📅 ${details.eventDate}\n` +
+      `📍 ${details.venue}, ${details.city}\n\n` +
+      `*Tu boleto:*\n` +
+      `• Zona: ${details.zone}\n` +
+      `• Fila: ${details.row} · Asiento: ${details.seat}\n` +
+      `• Precio pagado: $${details.price} MXN\n\n` +
+      `📲 *Ver QR de acceso:*\n${details.walletUrl}\n\n` +
+      `⚠️ Guarda este mensaje — el QR es tu entrada al evento.\n` +
+      `¡Nos vemos mañana! 🎉`;
     return this.sendMessage(phone, message);
   }
 

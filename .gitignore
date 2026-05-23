@@ -6,3 +6,5 @@ dist/
 .DS_Store
 /tmp/wwebjs_session
 /tmp/chromium-data-*
+.vercel
+.env*.local
