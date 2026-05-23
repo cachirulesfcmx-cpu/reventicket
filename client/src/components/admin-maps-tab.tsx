@@ -42,7 +42,7 @@ const COLORS = [
   "#3b82f6","#22c55e","#a855f7","#f59e0b","#ef4444",
   "#ec4899","#14b8a6","#f97316","#06b6d4","#8b5cf6",
 ];
-const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
+// Auth handled by apiRequest (CSRF + cookies)
 
 // ─── Shape Editor ─────────────────────────────────────────────────────────────
 
@@ -197,7 +197,7 @@ function ShapeEditor({
     );
 
     if (sec.shape === "polygon" && sec.points) {
-      const pts = sec.points.map(p => `${p.x}%,${p.y}%`).join(" ");
+      const pts = sec.points.map(p => `${p.x},${p.y}`).join(" ");
       return (
         <g key={sec.id} style={{ cursor: tool === "select" ? "pointer" : "default" }} onClick={onClick}>
           <polygon points={pts} fill={fill} stroke={stroke} strokeWidth={sw} />
@@ -278,7 +278,7 @@ function ShapeEditor({
       <div className="relative rounded-xl overflow-hidden border border-border select-none"
         style={{ cursor: tool === "select" ? "default" : tool === "polygon" ? "crosshair" : "crosshair" }}>
         <img src={imageUrl} alt="Recinto" className="w-full h-auto block pointer-events-none" draggable={false} />
-        <svg ref={svgRef} className="absolute inset-0 w-full h-full"
+        <svg ref={svgRef} className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -309,7 +309,7 @@ function ShapeEditor({
           {tool === "polygon" && polyPoints.length > 0 && (
             <>
               <polyline
-                points={[...polyPoints, hoverPt || polyPoints[polyPoints.length - 1]].map(p => `${p.x}%,${p.y}%`).join(" ")}
+                points={[...polyPoints, hoverPt || polyPoints[polyPoints.length - 1]].map(p => `${p.x},${p.y}`).join(" ")}
                 fill="none" stroke="#fff" strokeWidth="2" strokeDasharray="6,3"
               />
               {polyPoints.map((pt, i) => (
@@ -424,7 +424,7 @@ export function MapViewer({ map, onSelect }: { map: VenueMap; onSelect?: (s: Sec
 
     if (sec.shape === "polygon" && sec.points) {
       return <g key={sec.id} style={{cursor:"pointer"}} onClick={click}>
-        <polygon points={sec.points.map(p=>`${p.x}%,${p.y}%`).join(" ")} fill={fill} stroke={sec.color} strokeWidth={sw}/>{label}</g>;
+        <polygon points={sec.points.map(p=>`${p.x},${p.y}`).join(" ")} fill={fill} stroke={sec.color} strokeWidth={sw}/>{label}</g>;
     }
     if (sec.shape === "ellipse") {
       return <g key={sec.id} style={{cursor:"pointer"}} onClick={click}>
@@ -440,7 +440,7 @@ export function MapViewer({ map, onSelect }: { map: VenueMap; onSelect?: (s: Sec
     <div className="space-y-3">
       <div className="relative rounded-xl overflow-hidden border border-border">
         <img src={map.imageUrl} alt={map.name} className="w-full h-auto block" draggable={false} />
-        <svg ref={svgRef} className="absolute inset-0 w-full h-full" onClick={() => setSel(null)}>
+        <svg ref={svgRef} className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" onClick={() => setSel(null)}>
           {map.sections.map(renderSec)}
         </svg>
       </div>
@@ -472,7 +472,7 @@ export function AdminMapsTab() {
   const { data: maps = [], isLoading } = useQuery<VenueMap[]>({
     queryKey: ["/api/venue-maps"],
     queryFn: async () => {
-      const res = await fetch("/api/venue-maps", { headers: authHeader() });
+      const res = await apiRequest("GET", "/api/venue-maps");
       if (!res.ok) throw new Error("Error cargando mapas");
       return res.json();
     },
@@ -480,11 +480,7 @@ export function AdminMapsTab() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: { name: string; imageUrl: string; sections: Section[] }) => {
-      const res = await fetch("/api/venue-maps", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify(payload),
-      });
+      const res = await apiRequest("POST", "/api/venue-maps", payload);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Error guardando mapa");
       return json;
@@ -499,7 +495,7 @@ export function AdminMapsTab() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/venue-maps/${id}`, { method: "DELETE", headers: authHeader() });
+      const res = await apiRequest("DELETE", `/api/venue-maps/${id}`);
       if (!res.ok) throw new Error("Error eliminando mapa");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/venue-maps"] }); toast({ title: "Mapa eliminado" }); },
