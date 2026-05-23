@@ -20,10 +20,12 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateEvent, useVenues } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { MapViewer } from "@/components/admin-maps-tab";
 import {
   Plus, Trash2, ChevronRight, ChevronLeft,
   MapPin, Calendar, Ticket, Upload, CheckCircle2,
-  MessageCircle, Star, Zap
+  MessageCircle, Star, Zap, Map
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +57,7 @@ interface FormData {
   artist: string;
   description: string;
   venue: string;
+  venueMapId: string;
   address: string;
   totalCapacity: string;
   featured: boolean;
@@ -99,7 +102,7 @@ const DELIVERY = ["📱 QR WhatsApp", "✉️ Email", "📄 PDF descargable", "�
 
 const DEFAULT_FORM: FormData = {
   title: "", category: "", city: "", date: "", time: "21:00",
-  artist: "", description: "", venue: "", address: "", totalCapacity: "",
+  artist: "", description: "", venue: "", venueMapId: "", address: "", totalCapacity: "",
   featured: false, allowResale: true, whatsappAlerts: true,
   tags: [], tickets: [
     { id: 1, name: "General",   basePrice: "", resellerPrice: "", available: "", section: "Norte",     benefits: "" },
@@ -207,6 +210,20 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
 
   // Load real venues from the API
   const { data: apiVenues = [] } = useVenues();
+
+  // Load saved venue maps from the API
+  const adminToken = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  const { data: venueMaps = [] } = useQuery<any[]>({
+    queryKey: ["/api/venue-maps"],
+    queryFn: async () => {
+      const res = await fetch("/api/venue-maps", {
+        headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  const selectedMap = venueMaps.find((m: any) => String(m.id) === form.venueMapId) ?? null;
 
   // Try to use the create hook if it exists, otherwise we'll handle manually
   let createEvent: ((data: unknown) => Promise<unknown>) | null = null;
@@ -489,36 +506,43 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
       </div>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Mapa interactivo de secciones</Label>
-          {form.activeSections.length > 0 && (
-            <Badge variant="outline" className="text-xs">{form.activeSections.length} activas</Badge>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">Haz clic en una sección para activarla y configurar precios</p>
-        <VenueMap active={form.activeSections} onToggle={toggleSection} />
-      </div>
-
-      {form.activeSections.length > 0 && (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Secciones activas</Label>
-          <div className="rounded-lg border border-border divide-y divide-border">
-            {form.activeSections.map(id => {
-              const s = SECTIONS[id];
-              if (!s) return null;
-              return (
-                <div key={id} className="flex items-center gap-3 px-3 py-2">
-                  <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
-                  <span className="text-sm flex-1">{s.name}</span>
-                  <span className="text-xs text-muted-foreground">{s.capacity} lugares</span>
-                  <span className="text-sm font-medium text-primary">${parseInt(s.price).toLocaleString()}</span>
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                </div>
-              );
-            })}
+        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Mapa del recinto</Label>
+        {venueMaps.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-4 text-center">
+            <Map className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+            <p className="text-sm text-muted-foreground">No tienes mapas guardados aún.</p>
+            <p className="text-xs text-muted-foreground mt-1">Crea uno en <strong>Panel Admin → Mapas de Recintos</strong>.</p>
           </div>
-        </div>
-      )}
+        ) : (
+          <>
+            <Select value={form.venueMapId} onValueChange={v => set("venueMapId", v)}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar mapa del recinto..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sin mapa</SelectItem>
+                {venueMaps.map((m: any) => (
+                  <SelectItem key={String(m.id)} value={String(m.id)}>
+                    {m.name}{m.sections?.length ? ` · ${m.sections.length} secciones` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedMap && selectedMap.imageUrl && (
+              <div className="mt-3 rounded-xl overflow-hidden border border-border">
+                <div className="bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2">
+                  <Map className="h-3.5 w-3.5" />
+                  Vista previa — {selectedMap.name}
+                  {selectedMap.sections?.length > 0 && (
+                    <Badge variant="outline" className="text-xs ml-auto">{selectedMap.sections.length} secciones</Badge>
+                  )}
+                </div>
+                <div className="p-3 h-64">
+                  <MapViewer map={selectedMap} />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 
