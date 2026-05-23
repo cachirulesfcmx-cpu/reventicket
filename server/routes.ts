@@ -1858,10 +1858,24 @@ export async function registerRoutes(
 
   // ─── VENUE MAPS (reutilizables, sin evento) ──────────────────────────────────
 
+  // Helper: normalise a venue_maps row to camelCase for the client
+  const normaliseMap = (r: any) => ({
+    id: r.id,
+    name: r.name,
+    imageUrl: r.image_url ?? r.imageUrl ?? null,
+    sections: (() => {
+      const s = r.sections;
+      if (!s) return [];
+      if (typeof s === "string") { try { return JSON.parse(s); } catch { return []; } }
+      return Array.isArray(s) ? s : [];
+    })(),
+    createdAt: r.created_at ?? r.createdAt,
+  });
+
   app.get("/api/venue-maps", requireAdmin, async (req, res) => {
     try {
       const result = await pool.query("SELECT * FROM venue_maps ORDER BY created_at DESC");
-      res.json(result.rows.map(r => ({ ...r, sections: r.sections || [] })));
+      res.json(result.rows.map(normaliseMap));
     } catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
@@ -1873,7 +1887,7 @@ export async function registerRoutes(
         "INSERT INTO venue_maps (name, image_url, sections) VALUES ($1, $2, $3) RETURNING *",
         [name, imageUrl || null, JSON.stringify(sections || [])]
       );
-      res.status(201).json(result.rows[0]);
+      res.status(201).json(normaliseMap(result.rows[0]));
     } catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
@@ -1885,7 +1899,7 @@ export async function registerRoutes(
         [name||null, imageUrl||null, sections ? JSON.stringify(sections) : null, req.params.id]
       );
       if (!result.rows[0]) return res.status(404).json({ error: "Mapa no encontrado" });
-      res.json(result.rows[0]);
+      res.json(normaliseMap(result.rows[0]));
     } catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 

@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateEvent } from "@/lib/api";
+import { useCreateEvent, useVenues } from "@/lib/api";
 import {
   Plus, Trash2, ChevronRight, ChevronLeft,
   MapPin, Calendar, Ticket, Upload, CheckCircle2,
@@ -81,15 +81,6 @@ const STEPS = [
   { label: "Boletos", icon: Ticket },
   { label: "Publicar", icon: Zap },
 ];
-
-const VENUES: Record<string, { label: string; address: string; capacity: string }> = {
-  foro_sol:    { label: "Foro Sol — CDMX",              address: "Viaducto Piedad 9, Granjas México, CDMX",                   capacity: "65000" },
-  azteca:      { label: "Estadio Azteca — CDMX",        address: "Calz. de Tlalpan 3465, Santa Úrsula Coapa, CDMX",          capacity: "87000" },
-  palacio:     { label: "Palacio de los Deportes — CDMX",address: "Av. del Conscripto 311, Lomas de Sotelo, CDMX",            capacity: "22000" },
-  akron:       { label: "Estadio Akron — GDL",          address: "Av. Paseo de la Arboleda 7050, Zapopan, Jalisco",          capacity: "49850" },
-  bbva:        { label: "Estadio BBVA — MTY",           address: "Av. Fundidora s/n, Monterrey, Nuevo León",                 capacity: "53500" },
-  arena_cdmx:  { label: "Arena Ciudad de México",       address: "Av. de los Insurgentes Sur 3000, CDMX",                    capacity: "22300" },
-};
 
 const SECTIONS: Record<string, SectionData> = {
   norte:       { name: "Norte",      price: "800",  capacity: "8,000",  color: "#1e3a5a" },
@@ -214,6 +205,9 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const { toast } = useToast();
 
+  // Load real venues from the API
+  const { data: apiVenues = [] } = useVenues();
+
   // Try to use the create hook if it exists, otherwise we'll handle manually
   let createEvent: ((data: unknown) => Promise<unknown>) | null = null;
   try {
@@ -246,8 +240,14 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
     set("tickets", form.tickets.map(t => t.id === id ? { ...t, [key]: value } : t));
 
   const handleVenueChange = (val: string) => {
-    const v = VENUES[val];
-    setForm(f => ({ ...f, venue: val, address: v?.address ?? "", totalCapacity: v?.capacity ?? "" }));
+    // val is the venue ID from the API
+    const v = apiVenues.find((venue: any) => String(venue.id) === val);
+    setForm(f => ({
+      ...f,
+      venue: val,
+      address: v?.address ?? "",
+      totalCapacity: v?.capacity ? String(v.capacity) : "",
+    }));
   };
 
   const handleClose = () => {
@@ -463,11 +463,19 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
           <Select value={form.venue} onValueChange={handleVenueChange}>
             <SelectTrigger><SelectValue placeholder="Seleccionar recinto..." /></SelectTrigger>
             <SelectContent>
-              {Object.entries(VENUES).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              {apiVenues.length === 0 && (
+                <SelectItem value="__none__" disabled>No hay recintos — crea uno primero</SelectItem>
+              )}
+              {apiVenues.map((v: any) => (
+                <SelectItem key={String(v.id)} value={String(v.id)}>
+                  {v.name}{v.city ? ` — ${v.city}` : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {apiVenues.length === 0 && (
+            <p className="text-xs text-amber-500 mt-1">⚠️ Primero crea un recinto en la pestaña "Recintos" del panel admin.</p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label>Capacidad total</Label>
@@ -626,7 +634,7 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
           { k: "Categoría",       v: form.category || "—" },
           { k: "Ciudad",          v: form.city || "—" },
           { k: "Fecha y hora",    v: formattedDate ? `${formattedDate} · ${form.time}` : "—" },
-          { k: "Recinto",         v: form.venue ? VENUES[form.venue]?.label : "—" },
+          { k: "Recinto",         v: form.venue ? (() => { const v = apiVenues.find((x: any) => String(x.id) === form.venue); return v ? `${v.name}${v.city ? ` — ${v.city}` : ""}` : form.venue; })() : "—" },
           { k: "Secciones",       v: `${form.activeSections.length} sección${form.activeSections.length !== 1 ? "es" : ""}` },
           { k: "Tipos de boleto", v: `${form.tickets.length} nivel${form.tickets.length !== 1 ? "es" : ""}` },
           { k: "Entrega",         v: form.deliveryMethods.join(", ") || "—" },
