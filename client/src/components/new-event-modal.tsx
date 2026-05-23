@@ -377,7 +377,7 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
         <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Etiquetas</Label>
         <div className="flex flex-wrap gap-2">
           {TAGS.map(tag => (
-            <button key={tag} onClick={() => toggleTag(tag)}
+            <button type="button" key={tag} onClick={() => toggleTag(tag)}
               className={cn("px-3 py-1 rounded-full border text-xs transition-all",
                 form.tags.includes(tag)
                   ? "border-primary bg-primary/10 text-primary"
@@ -494,7 +494,7 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
                 onChange={e => updateTicket(ticket.id, "name", e.target.value)}
                 className="h-7 text-sm font-medium border-0 p-0 focus-visible:ring-0 w-auto max-w-[200px]"
               />
-              <button onClick={() => removeTicket(ticket.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+              <button type="button" onClick={() => removeTicket(ticket.id)} className="text-muted-foreground hover:text-destructive transition-colors">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -529,7 +529,7 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
             </div>
           </div>
         ))}
-        <button onClick={addTicket}
+        <button type="button" onClick={addTicket}
           className="w-full border-2 border-dashed border-border rounded-lg py-3 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-2">
           <Plus className="h-4 w-4" /> Agregar tipo de boleto
         </button>
@@ -568,7 +568,7 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
         <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Entrega de boletos</Label>
         <div className="flex flex-wrap gap-2">
           {DELIVERY.map(m => (
-            <button key={m} onClick={() => toggleDelivery(m)}
+            <button type="button" key={m} onClick={() => toggleDelivery(m)}
               className={cn("px-3 py-1.5 rounded-full border text-xs transition-all",
                 form.deliveryMethods.includes(m)
                   ? "border-primary bg-primary/10 text-primary"
@@ -613,7 +613,7 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
         <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estado de publicación</Label>
         <div className="flex gap-2">
           {(["published","draft","scheduled"] as const).map(s => (
-            <button key={s} onClick={() => set("publishStatus", s)}
+            <button type="button" key={s} onClick={() => set("publishStatus", s)}
               className={cn("px-3 py-1.5 rounded-full border text-xs transition-all",
                 form.publishStatus === s ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-foreground"
               )}>
@@ -671,7 +671,7 @@ export function NewEventModal({ open, onOpenChange }: NewEventModalProps) {
           {STEPS.map((s, i) => {
             const Icon = s.icon;
             return (
-              <button key={i} onClick={() => setStep(i)}
+              <button type="button" key={i} onClick={() => setStep(i)}
                 className={cn(
                   "flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all",
                   i === step ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
