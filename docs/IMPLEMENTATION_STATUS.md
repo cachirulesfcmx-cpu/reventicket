@@ -12,7 +12,7 @@ Leyenda: **Verificado local** = ejecutado en este entorno · **Verificado CI** =
 | App Expo | Completo (modo demo) | tsc · lint · 3 tests · expo-doctor 20/20 · export Android+iOS | Builds EAS (bloqueado: cuenta) |
 | Predictor | Completo (investigación) | 43 tests; backtests reales Liga MX y NFL | Datos para UCL/LaLiga/MLB/NBA |
 | Migración inicial | Aplicada · Remoto | `vanta_initial_schema` en Supabase `reventicket` | — |
-| Migración de seguridad | **Pendiente** | 41/41 local + CI; dos intentos remotos sin confirmación del usuario a tiempo | Aprobar el aviso de Supabase |
+| Migración de seguridad | **Pendiente** | 41/41 local + CI; tres intentos remotos sin confirmación del usuario a tiempo (sin cambios parciales) | Aprobar el aviso de Supabase o pegar el SQL en el SQL Editor; luego ejecutar `supabase/tests/remote_verify.sql` (transacción con ROLLBACK) |
 | CI GitHub Actions | Completo · Verificado | Run 40730242936: 6/6 jobs success | — |
 | Vercel Preview | Completo · Remoto | `dpl_GyYm9dtyJtRPxPra2P9noVhnvc3S` READY (commit `f08dbcb`), smoke 22/22 | Proyecto propio `vanta-edge` antes de producción |
 | Proveedor de datos real | **Bloqueado** | Sin clave/licencia | Ver `DATA_PROVIDER_MATRIX.md` |
