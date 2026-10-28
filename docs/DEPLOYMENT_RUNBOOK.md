@@ -1,24 +1,34 @@
-# Deployment runbook (initial)
+# Runbook de despliegue
 
-## Vercel web
-1. Import the repository into Vercel and set Root Directory to `apps/web` while preserving workspace installation from the repository root as required by Vercel's monorepo settings.
-2. Build command: `npm run build:web` from the root, or the workspace-specific build command if the Vercel project is configured for the repository root. Confirm the chosen root/build setup in a Preview deployment.
-3. Add only required environment variables in Vercel project settings. Public Supabase URL/key may be browser-visible; service-role key is server-only.
-4. Deploy Preview first and run `/api/health`, `/api/games`, `/api/picks` smoke tests.
-5. Promote to production only after authorization and successful checks.
+## 1. GitHub
 
-## Supabase
-1. Review SQL migration in a staging project.
-2. Apply using Supabase CLI or SQL editor.
-3. Verify tables, indexes, triggers and RLS policies.
-4. Run anonymous and authenticated permission tests.
-5. Configure backups and monitor logs before production use.
+- Rama: `claude/studia-audit-implementation-deploy-jt3wi9` (no protegida). Sin merge a `main` sin autorización.
+- CI (`.github/workflows/ci.yml`) en cada push/PR: security (secretos + auditoría), shared, web (lint, tsc, tests, build, canarios), mobile (tsc, lint, tests, expo-doctor, export Android/iOS), predictor (pytest), database (migraciones + RLS + rollback). Todos los jobs fallan si falla una comprobación.
 
-## Mobile
-1. Run `npm run dev:mobile` from root.
-2. Configure Expo/EAS project ID and signing credentials securely.
-3. Build internal iOS and Android test builds before store submissions.
-4. Store submission requires real-device QA, privacy details, screenshots and platform-policy review.
+## 2. Supabase (proyecto `reventicket`, ref `jxdyrzbeykhswpndoing`)
 
-## Rollback
-Revert the application deployment to the last known good commit. Database migrations should be forward-compatible; use a reviewed compensating migration rather than destructive rollback. Preserve audit records and prediction snapshots.
+1. Migraciones en orden: `202610240001_initial_schema.sql` (**aplicada**) → `202610280001_hardening.sql` (**pendiente de tu confirmación**).
+2. Con CLI: `supabase link --project-ref jxdyrzbeykhswpndoing && supabase db push`. O desde Claude con aprobación del aviso de Supabase.
+3. Verificar: `select name from supabase_migrations.schema_migrations;` y que existan los triggers `vanta_*` (3).
+4. Auth: activar confirmación de correo; longitud mínima 10; URLs de redirección de la web.
+5. Tipos TypeScript: `supabase gen types typescript --project-id jxdyrzbeykhswpndoing > packages/shared/src/database.types.ts` (tras la migración de seguridad).
+6. MelatePro (`mvdomupjwfrapbqwczux`) no debe usarse en ningún comando.
+
+## 3. Vercel (bloqueado: el token de esta sesión no puede crear proyectos)
+
+Pasos manuales en el panel del equipo `cachirulesfcmx-cpu's projects`:
+1. **Add New → Project →** importar `cachirulesfcmx-cpu/reventicket`, nombre `vanta-edge`.
+2. **Root Directory**: `apps/web` · Framework: Next.js · "Include files outside the root directory": activado. `apps/web/vercel.json` ya fija `installCommand: cd ../.. && npm ci` y `buildCommand: next build`.
+3. Variables (Preview): `PREDICTIONS_ENABLED=false`, `SPORTS_DATA_PROVIDER=demo`; opcionales `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`; secretos `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` como *Sensitive*, solo si se usan.
+4. Desplegar la rama como **Preview** (no promover a producción).
+5. Smoke: `BASE_URL=https://<url-preview> node apps/web/e2e/smoke.mjs`.
+
+Nota: el proyecto Vercel existente `reventicket` sigue sirviendo la app antigua desde `main` (producción `READY`). El `vercel.json` raíz desactiva sus builds de esta rama para no generar previews fallidos.
+
+## 4. Expo / EAS (bloqueado: sin cuenta)
+
+`cd apps/mobile && npx eas init && npx eas build --profile preview --platform all`. Configurar `EXPO_PUBLIC_API_BASE_URL` con la URL del Preview. Sin ella, la app funciona en modo demo.
+
+## 5. Variables
+
+Ver `.env.example` (solo nombres y valores ficticios).

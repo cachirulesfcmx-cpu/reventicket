@@ -1,8 +1,13 @@
-# Rollback plan
+# Recuperación ante fallos
 
-- Stop promotion of new builds and disable prediction publication via server-side configuration if data or model integrity is in doubt.
-- Roll back Vercel to the last known good deployment.
-- Revert code through a reviewed commit; never force-push protected branches.
-- For database changes, use reviewed compensating migrations and restore from a verified backup only after impact analysis and explicit approval.
-- Preserve published prediction audit history. Do not rewrite outcomes or snapshots to conceal a failed release.
-- Record incident start/end, affected versions, root cause, data integrity status and corrective actions.
+| Componente | Cómo revertir |
+|---|---|
+| Web (Vercel) | "Instant Rollback" al despliegue anterior. Producción de `reventicket` no se ha modificado. |
+| Rama Git | Commits nuevos de reversión (`git revert`); nunca force-push. StudIA: `823cafe` y rama local `studia-archive`. |
+| Migración de seguridad | Preferir corrección hacia adelante. Si hay que revertir: `supabase/rollback/202610280001_hardening_down.sql` (probado: `npm run test:rollback`; conserva columnas añadidas y no borra tablas con datos). |
+| Migración inicial | Con tablas vacías se puede eliminar el esquema VANTA; con datos, solo con respaldo y aprobación. No toca las tablas antiguas de reventicket (`users`, `venues`, `events`, …). |
+| Publicación de picks | `PREDICTIONS_ENABLED=false` y/o `update model_versions set approved_for_publication = false` → la RLS oculta sus predicciones al instante (probado). |
+| App móvil | Publicar build anterior / OTA anterior; la app sin API vuelve sola a modo demo. |
+| Ingesta | Retirar `CRON_SECRET` o `SPORTS_DATA_PROVIDER=demo`: la ruta falla cerrada. |
+
+Antes de cualquier operación destructiva: consultar estado (`supabase_migrations.schema_migrations`, conteos), exportar respaldo y obtener autorización explícita.

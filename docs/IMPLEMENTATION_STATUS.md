@@ -1,17 +1,21 @@
-# Implementation status — initial package
+# Estado de implementación
 
-| Area | Status | Evidence / limitation |
-|---|---|---|
-| Web dashboard | Starter implemented | Next.js page with responsive dark/glass UI and clearly labeled demo records |
-| Mobile app | Starter implemented | Expo/React Native single-screen demo dashboard; device builds not yet run |
-| Shared domain types | Implemented | Sport/game/pick TypeScript types |
-| Web health route | Implemented | `/api/health` reports safe demo/configuration mode |
-| Games and picks API | Demo only | No live sports provider connected |
-| Supabase schema | Initial migration prepared | Must be applied and RLS tested against a real staging project |
-| Predictor API | Baseline utility | Arithmetic helpers only; no trained predictive models or production picks |
-| Model validation | Policy documented | No empirical model performance claims made |
-| CI | Workflow prepared | Must be executed by GitHub Actions after repository push |
-| Vercel/Supabase deployment | Not verified | Requires account/project access and explicit authorization |
-| App Store/Google Play | Not published | Requires EAS credentials, device QA and store review |
+Leyenda: **Verificado local** = ejecutado en este entorno · **Verificado CI** = GitHub Actions en `4c44bd0` · **Remoto** = servicio real · **Bloqueado** = falta permiso/credencial/dato.
 
-This document reflects the starter source, not a completed deployment or production certification.
+| Área | Estado | Evidencia | Siguiente acción |
+| --- | --- | --- | --- |
+| Monorepo / dependencias | Completo | Un solo `package-lock.json`; `react@19.3.0` único en el árbol; `expo install --check` limpio | — |
+| Build web (Next 16.4) | Completo · Verificado local + CI | `npm run build:web` exit 0 (antes FAIL por React duplicado) | — |
+| Web: lint / typecheck / tests | Completo · Verificado local + CI | ESLint 0 avisos · tsc 0 · 23 tests | — |
+| Web: páginas y API | Completo (modo demo) | 22/22 smoke en navegador (local) | Repetir en Preview |
+| Paquete compartido | Completo | 10 tests | — |
+| App Expo | Completo (modo demo) | tsc · lint · 3 tests · expo-doctor 20/20 · export Android+iOS | Builds EAS (bloqueado: cuenta) |
+| Predictor | Completo (investigación) | 43 tests; backtests reales Liga MX y NFL | Datos para UCL/LaLiga/MLB/NBA |
+| Migración inicial | Aplicada · Remoto | `vanta_initial_schema` en Supabase `reventicket` | — |
+| Migración de seguridad | **Pendiente** | 41/41 local + CI; dos intentos remotos sin confirmación del usuario a tiempo | Aprobar el aviso de Supabase |
+| CI GitHub Actions | Completo · Verificado | Run 40730242936: 6/6 jobs success | — |
+| Vercel Preview | **Bloqueado** | Crear proyecto: HTTP 403 (sin permiso) | Paso manual en `DEPLOYMENT_RUNBOOK.md` |
+| Proveedor de datos real | **Bloqueado** | Sin clave/licencia | Ver `DATA_PROVIDER_MATRIX.md` |
+| Picks reales | Desactivados a propósito | Gate: 0/3 modelos aprobados | — |
+| Builds EAS / tiendas | **Bloqueado** | Sin cuenta Expo/Apple/Google | — |
+| MelatePro | Intacto | No se ejecutó ninguna operación sobre `mvdomupjwfrapbqwczux` | — |

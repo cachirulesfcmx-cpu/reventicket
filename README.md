@@ -1,35 +1,48 @@
-# VANTA EDGE — Sports Intelligence Platform
+# VANTA EDGE — Sports Intelligence
 
-Monorepo starter for a mobile-first sports analytics product covering Liga MX, UEFA Champions League, LaLiga, NFL, MLB and NBA. Includes Expo mobile app, Next.js web dashboard/API, Supabase schema with RLS, and a Python prediction-service baseline.
+Plataforma de **análisis deportivo informativo** (web + iOS/Android) para Liga MX, Champions League, LaLiga, NFL, MLB y NBA: calendario, fichas de partido, probabilidades explicables, historial inmutable y rendimiento de modelos. **No acepta apuestas, no custodia dinero y no enlaza a operadores.**
 
-> Important: this is a functional development baseline, not a claim of production-grade predictive edge. Demo data is explicitly labeled. No betting transactions, wallets, or wagering integrations are implemented. Probabilities must be validated out-of-sample before being presented as reliable.
+> Estado: MVP en **modo demostración**. `PREDICTIONS_ENABLED=false`: ningún modelo ha superado la validación contra el mercado (ver `docs/MODEL_VALIDATION.md`).
 
-## Stack
-- `apps/mobile`: Expo + React Native + TypeScript
-- `apps/web`: Next.js App Router + TypeScript
-- `packages/shared`: shared sports domain types
-- `services/predictor`: FastAPI + scikit-learn baseline probability service
-- `supabase/migrations`: PostgreSQL schema, RLS, indexes, audit-safe prediction records
-- `.github/workflows`: CI checks
+## Estructura
 
-## Prerequisites
-Node.js 20+, npm 10+, Python 3.11+, Git. Supabase project and Vercel account are needed for hosted deployment.
+```
+apps/web            Next.js 16 (dashboard + API) — despliegue en Vercel (Root Directory: apps/web)
+apps/mobile         Expo SDK 58 (iOS/Android)
+packages/shared     Tipos, esquemas zod, cálculo de cuotas/probabilidades, explicaciones, fixtures demo
+services/predictor  Python: baselines, backtesting walk-forward, gate de promoción, API FastAPI
+supabase/           Migraciones, pruebas RLS (Postgres local), rollback
+scripts/            Escaneo de secretos, chequeo de bundles, gate de auditoría, exportación de resultados
+docs/               Estado, despliegue, datos, validación, seguridad, smoke tests, rollback
+```
 
-## Run locally
-1. `cp .env.example .env.local` and fill in Supabase URL/public key when available. The web dashboard can render demo mode without credentials.
-2. `npm install`
-3. `npm run dev:web` (web at http://localhost:3000)
-4. In another terminal: `npm run dev:mobile` (Expo QR; use Expo Go or simulator)
-5. Predictor: `cd services/predictor && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && uvicorn app:app --reload --port 8001`
+## Requisitos
 
-## Supabase setup
-Use Supabase SQL Editor or Supabase CLI to apply migrations in lexical order. Never commit service-role keys. The app uses anon/publishable credentials in clients and RLS for user data. Server-only secrets belong in Vercel environment variables.
+Node 20.19+ (CI usa 22) y npm 10 · Python 3.13 · PostgreSQL 16+ (solo para pruebas SQL locales).
 
-## Important release gates
-- Configure a licensed data provider and confirm rights for commercial display, historical storage, logos, player photos and odds.
-- Implement provider adapters and monitor freshness; never fabricate injuries, lineups, odds or live scores.
-- Run chronological walk-forward backtests, compare against baselines and market-implied probabilities, calibrate, and preserve immutable prediction snapshots.
-- `PREDICTIONS_ENABLED` defaults to false. Keep it false until model validation is approved.
-- Verify Apple/Google policies, privacy, subscription and applicable legal requirements before store submission.
+## Comandos
 
-See `docs/CLAUDE_CODE_DEPLOYMENT_PROMPT.md` for the deployment and verification handoff.
+```bash
+npm ci                                   # instalación reproducible (un solo package-lock.json)
+npm run dev:web                          # http://localhost:3000 (funciona sin secretos, modo demo)
+npm run dev:mobile                       # Expo (Expo Go / simulador)
+npm run typecheck && npm run lint && npm test
+npm run build:web
+npm run test:sql && npm run test:rollback   # migraciones + 41 aserciones RLS en Postgres local
+node scripts/check-secrets.mjs && npm run audit:gate
+cd services/predictor && python -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m pytest -q
+.venv/bin/python -m vanta_predictor.research   # backtests reales (descarga datos a .data-cache, no versionado)
+node scripts/export-research-summary.mjs        # copia métricas agregadas a la web
+BASE_URL=http://127.0.0.1:3000 node apps/web/e2e/smoke.mjs   # smoke test en navegador
+```
+
+## Documentación
+
+- `docs/IMPLEMENTATION_STATUS.md` — estado por área con evidencia.
+- `docs/ARCHITECTURE.md` — arquitectura, flujos y seis deportes.
+- `docs/DEPLOYMENT_RUNBOOK.md` — Supabase, Vercel, Expo/EAS, GitHub Actions, variables.
+- `docs/DATA_PROVIDER_MATRIX.md` — cobertura y licencias de datos.
+- `docs/MODEL_VALIDATION.md` — método estadístico, resultados y política de publicación.
+- `docs/SECURITY_REVIEW.md` — RLS, secretos, riesgos aceptados.
+- `docs/SMOKE_TEST_RESULTS.md` — resultados reales de pruebas de humo.
+- `docs/ROLLBACK.md` — recuperación ante fallos.

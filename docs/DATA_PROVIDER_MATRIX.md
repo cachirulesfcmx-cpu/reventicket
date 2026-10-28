@@ -1,16 +1,29 @@
-# Data provider coverage matrix
+# Matriz de proveedores de datos
 
-Do not mark a cell covered until tested against a live provider account and the commercial license reviewed.
+No se marca ninguna celda como cubierta sin una cuenta real probada y la licencia comercial revisada.
 
-| Data domain | Liga MX | UCL | LaLiga | NFL | MLB | NBA |
+## Producto (datos en vivo)
+
+| Dominio | Liga MX | UCL | LaLiga | NFL | MLB | NBA |
 |---|---|---|---|---|---|---|
-| Schedule/results | Pending | Pending | Pending | Pending | Pending | Pending |
-| Historical event results | Pending | Pending | Pending | Pending | Pending | Pending |
-| Advanced team statistics | Pending | Pending | Pending | Pending | Pending | Pending |
-| Player statistics/props | Pending | Pending | Pending | Pending | Pending | Pending |
-| Injury/availability | Pending | Pending | Pending | Pending | Pending | Pending |
-| Confirmed lineups/starters | Pending | Pending | Pending | Pending | Pending | Pending |
-| Odds snapshots/history | Pending | Pending | Pending | Pending | Pending | Pending |
-| Commercial display rights | Pending | Pending | Pending | Pending | Pending | Pending |
+| Calendario / resultados | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente |
+| Histórico | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente |
+| Estadísticas avanzadas | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente |
+| Lesiones / alineaciones | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente |
+| Cuotas (con licencia de visualización) | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente |
+| Logos / fotos | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente | Pendiente |
 
-A demo adapter is not a live source. Record provider, endpoint, test date, latency, rate limits, freshness, missingness and license scope for every verified cell.
+Mientras tanto la app muestra fixtures **demo** etiquetadas y "Datos no disponibles" para lesiones, alineaciones y cuotas.
+
+## Investigación offline (no se redistribuye)
+
+| Fuente | Uso | Cobertura verificada | Licencia |
+|---|---|---|---|
+| football-data.co.uk `new/MEX.csv` | Backtest Liga MX | 4 779 partidos 2012/13→2026/27; cuotas de cierre Pinnacle (con huecos: 475 de 800 en holdout) | Gratuito para uso personal; **confirmar** antes de uso comercial |
+| nflverse/nfldata `games.csv` | Backtest NFL | 7 074 partidos de temporada regular con resultado; moneylines en todo el holdout | Comunitario; **confirmar** licencia y atribución |
+
+Solo se publican en la web métricas agregadas (log loss, Brier, ROI simulado), no filas de datos.
+
+## Antes de contratar un proveedor
+
+Verificar por cada deporte: endpoints, profundidad histórica, identificadores estables, timestamps y estados, lesiones/alineaciones, cuotas y su derecho de visualización, límites de tasa, atribución, almacenamiento permitido, logos/fotos y redistribución. Implementar el adaptador contra `SportsDataProvider` (`apps/web/lib/providers/types.ts`), validar cada evento con `ProviderGameSchema` y registrar cada corrida en `ingestion_runs`.
