@@ -11,10 +11,20 @@
     "dev:mobile": "npm --workspace apps/mobile run start",
     "build:web": "npm --workspace apps/web run build",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:sql": "bash supabase/tests/run-local.sh",
+    "test:predictor": "cd services/predictor && python -m pytest -q",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "audit:gate": "node scripts/audit-gate.mjs"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.19.0"
   },
-  "packageManager": "npm@10.8.2"
+  "packageManager": "npm@10.8.2",
+  "overrides": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
 }

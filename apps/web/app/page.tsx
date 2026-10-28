@@ -1,14 +1,57 @@
-import { Activity, ArrowUpRight, BrainCircuit, CalendarDays, ChartNoAxesCombined, CircleDot, Clock3, ShieldCheck, Sparkles, Trophy, Zap } from 'lucide-react';
-import { demoGames } from '@/lib/demo';
-import { SPORT_LABELS } from '@vanta-edge/shared';
-const sports = [
- {id:'LIGA_MX',icon:'⚽',sub:'Fútbol mexicano'}, {id:'UCL',icon:'✦',sub:'Europa'}, {id:'LALIGA',icon:'⚽',sub:'España'}, {id:'NFL',icon:'🏈',sub:'Fútbol americano'}, {id:'MLB',icon:'⚾',sub:'Béisbol'}, {id:'NBA',icon:'🏀',sub:'Baloncesto'}
-] as const;
-function fmtDate(s:string){return new Intl.DateTimeFormat('es-MX',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(s));}
-export default function Home(){return <main className="shell"><header className="topbar"><div className="brand"><div className="brand-mark"><ChartNoAxesCombined size={24}/></div><div><div className="brand-name">VANTA EDGE</div><div className="brand-sub">SPORTS INTELLIGENCE PLATFORM</div></div></div><div className="status-pill"><CircleDot size={10} style={{display:'inline',marginRight:7}}/> MODO DEMOSTRACIÓN</div></header>
-<section className="hero"><div className="hero-main glass"><div className="hero-orb"/><div className="eyebrow"><Sparkles size={13} style={{display:'inline',marginRight:7}}/>Inteligencia deportiva, con evidencia</div><h1>Lee el juego.<br/><span>Entiende la ventaja.</span></h1><p>Analítica deportiva multideporte, probabilidades transparentes y contexto para cada encuentro. Sin promesas mágicas: datos, modelos y validación.</p><div style={{display:'flex',gap:9,flexWrap:'wrap',marginTop:22}}><span className="status-pill">6 deportes</span><span className="status-pill">Modelos especializados</span><span className="status-pill">Historial auditable</span></div></div><div className="metric-card glass"><div><div className="metric-label"><Activity size={14} style={{display:'inline',marginRight:7}}/>ESTADO DEL MOTOR</div><div className="metric-number">En calibración</div><p className="metric-note">Los picks reales permanecen desactivados hasta validar modelos con datos fuera de muestra. Los eventos visibles son ejemplos de interfaz.</p></div><div style={{display:'flex',alignItems:'center',gap:9,color:'var(--green)',fontSize:12}}><ShieldCheck size={17}/> Integridad antes que volumen</div></div></section>
-<div className="section-head"><div><h2>Explora los deportes</h2><p>Un producto, seis módulos analíticos.</p></div><span className="text-link">Temporada 2026 <ArrowUpRight size={14} style={{display:'inline'}}/></span></div><section className="sports-grid">{sports.map(s=><a className="sport-card glass" href={`#${s.id}`} key={s.id}><div className="sport-icon" style={{fontSize:22}}>{s.icon}</div><div><div className="sport-title">{SPORT_LABELS[s.id]}</div><div className="sport-sub">{s.sub}</div></div></a>)}</section>
-<div className="section-head"><div><h2>Centro de partidos</h2><p>Datos ilustrativos para comprobar la experiencia visual.</p></div><span className="text-link"><CalendarDays size={14} style={{display:'inline',marginRight:5}}/>Calendario</span></div><section className="games-grid">{demoGames.map(g=><article id={g.sport} className="game-card glass" key={g.id}><div className="game-meta"><span>{g.competition}</span><span className="demo-tag">DEMO</span></div><div className="team-row"><div style={{display:'flex',alignItems:'center',gap:10}}><div className="team-short">{g.home.shortName}</div><div className="team-name">{g.home.name}</div></div></div><div className="versus">VS</div><div className="team-row"><div style={{display:'flex',alignItems:'center',gap:10}}><div className="team-short">{g.away.shortName}</div><div className="team-name">{g.away.name}</div></div></div><div className="game-footer"><span><Clock3 size={13} style={{display:'inline',marginRight:5}}/>{fmtDate(g.startsAt)}</span><span className="text-link">Ver análisis <ArrowUpRight size={13} style={{display:'inline'}}/></span></div></article>)}</section>
-<div className="section-head"><div><h2>Cómo construimos una predicción</h2><p>Un flujo trazable, no un porcentaje inventado.</p></div></div><section className="sports-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))'}}>{[{icon:<CalendarDays size={20}/>,title:'Datos verificados',desc:'Fuentes, marcas temporales y frescura.'},{icon:<BrainCircuit size={20}/>,title:'Modelos por deporte',desc:'Variables y validación específicas.'},{icon:<Zap size={20}/>,title:'Probabilidad calibrada',desc:'Incertidumbre y comparación de mercado.'},{icon:<Trophy size={20}/>,title:'Rendimiento auditable',desc:'Historial congelado y métricas reproducibles.'}].map(x=><div className="sport-card glass" key={x.title}><div className="sport-icon">{x.icon}</div><div><div className="sport-title">{x.title}</div><div className="sport-sub" style={{lineHeight:1.5}}>{x.desc}</div></div></div>)}</section>
-<div className="notice glass"><strong>Transparencia:</strong> esta versión está en modo demostración. Los partidos mostrados son datos ilustrativos, no fixtures confirmados; no hay cuotas en vivo ni picks reales conectados. Las probabilidades no se activarán hasta contar con datos licenciados, pruebas cronológicas y calibración documentada.</div>
-<footer className="footer"><span>© 2026 VANTA EDGE · Sports Intelligence</span><span>Informativo · Sin apuestas ni transacciones de juego</span></footer><nav className="bottom-nav glass"><a href="#top"><Activity size={18}/>Inicio</a><a href="#LIGA_MX"><CalendarDays size={18}/>Partidos</a><a href="#NBA"><BrainCircuit size={18}/>Análisis</a><a href="#performance"><ChartNoAxesCombined size={18}/>Rendimiento</a></nav></main>}
+import Link from 'next/link';
+import { SPORT_LABELS, SPORT_META, SPORTS } from '@vanta-edge/shared';
+import { GameCard, Notice } from '@/components/ui';
+import { getProvider } from '@/lib/providers';
+import { approvedModelCount, evaluatedModelCount } from '@/lib/research';
+
+export const dynamic = 'force-dynamic';
+
+export default async function Home() {
+  const provider = getProvider();
+  const games = await provider.listGames({ limit: 6 });
+  return (
+    <>
+      <section className="hero">
+        <div className="hero-main glass">
+          <div className="hero-orb" aria-hidden />
+          <p className="eyebrow">Inteligencia deportiva, con evidencia</p>
+          <h1>Lee el juego.<br /><span>Entiende la probabilidad.</span></h1>
+          <p>Calendario, datos y probabilidades explicables para seis competiciones. Sin promesas de ganar: cada modelo se valida contra el mercado antes de publicar nada.</p>
+          <div className="pill-row">
+            <span className="status-pill">6 competiciones</span>
+            <span className="status-pill">Backtesting cronológico</span>
+            <span className="status-pill">Historial inmutable</span>
+          </div>
+        </div>
+        <div className="metric-card glass">
+          <div>
+            <div className="metric-label">ESTADO DEL MOTOR</div>
+            <div className="metric-number">{approvedModelCount()} de {evaluatedModelCount()}</div>
+            <p className="metric-note">modelos aprobados. Los evaluados (Liga MX y NFL) no superan a las cuotas de cierre del mercado, así que los picks reales siguen desactivados.</p>
+          </div>
+          <Link className="text-link" href="/performance">Ver validación →</Link>
+        </div>
+      </section>
+
+      <div className="section-head"><div><h2>Explora los deportes</h2><p>Un producto, seis módulos analíticos.</p></div></div>
+      <section className="sports-grid">
+        {SPORTS.map((s) => (
+          <Link className="sport-card glass" href={`/games?sport=${s}`} key={s}>
+            <div className="sport-icon" aria-hidden>{SPORT_META[s].icon}</div>
+            <div><div className="sport-title">{SPORT_LABELS[s]}</div><div className="sport-sub">{SPORT_META[s].region}</div></div>
+          </Link>
+        ))}
+      </section>
+
+      <div className="section-head">
+        <div><h2>Próximos partidos</h2><p>{provider.isDemo ? 'Partidos ficticios para mostrar la interfaz.' : 'Datos del proveedor.'}</p></div>
+        <Link className="text-link" href="/games">Calendario completo →</Link>
+      </div>
+      <section className="games-grid">{games.map((g) => <GameCard key={g.id} game={g} />)}</section>
+
+      {provider.isDemo ? (
+        <Notice tone="warn"><strong>Transparencia:</strong> modo demostración. Los partidos mostrados son ficticios; no hay cuotas en vivo ni picks reales. Se activarán solo con datos licenciados y modelos que superen la validación.</Notice>
+      ) : null}
+    </>
+  );
+}

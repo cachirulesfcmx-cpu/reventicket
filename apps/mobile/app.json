@@ -1,1 +1,28 @@
-{"expo":{"name":"VANTA EDGE","slug":"vanta-edge","scheme":"vantaedge","version":"0.1.0","orientation":"portrait","userInterfaceStyle":"dark","newArchEnabled":true,"plugins":["expo-router"],"experiments":{"typedRoutes":true},"ios":{"supportsTablet":true,"bundleIdentifier":"com.vantaedge.sports"},"android":{"package":"com.vantaedge.sports","adaptiveIcon":{"backgroundColor":"#07110e"}},"extra":{"eas":{"projectId":"REPLACE_WITH_EAS_PROJECT_ID"}}}}
+{
+  "expo": {
+    "name": "VANTA EDGE",
+    "slug": "vanta-edge",
+    "scheme": "vantaedge",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-router"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vantaedge.sports"
+    },
+    "android": {
+      "package": "com.vantaedge.sports",
+      "adaptiveIcon": {
+        "backgroundColor": "#07110e"
+      }
+    },
+    "extra": {},
+    "platforms": [
+      "ios",
+      "android"
+    ]
+  }
+}

@@ -14,3 +14,7 @@ __pycache__
 .pytest_cache
 .data-cache
 services/predictor/reports/*.tmp
+apps/mobile/dist
+apps/web/.next
+apps/web/next-env.d.ts
+*.tsbuildinfo

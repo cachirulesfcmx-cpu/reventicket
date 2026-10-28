@@ -1,0 +1,221 @@
+{
+  "generatedAt": "2026-10-28T16:40:37.174Z",
+  "note": "Investigación offline. Ningún modelo está aprobado para publicar picks.",
+  "reports": [
+    {
+      "sport": "LIGA_MX",
+      "market": "1X2 (home/draw/away)",
+      "holdout": {
+        "start": "2024-07-01",
+        "end": "2026-10-26",
+        "events": 800,
+        "withOdds": 475
+      },
+      "source": {
+        "provider": "football-data.co.uk",
+        "terms": "Free historical results/odds; confirm licence before commercial use."
+      },
+      "baselines": {
+        "climatology": {
+          "log_loss": 1.06330147593526,
+          "brier": 0.6420320601202585
+        },
+        "market_no_vig": {
+          "log_loss": 0.9585380533769047,
+          "brier": 0.568356543424091
+        }
+      },
+      "models": {
+        "elo_davidson": {
+          "logLoss": 1.0064509772727284,
+          "brier": 0.6005594549885296,
+          "ece": 0.03289036292013678,
+          "vsMarket": [
+            0.019125060780223628,
+            0.002175773821273191,
+            0.036210482640066495
+          ],
+          "vsBaseline": [
+            -0.056850498662531564,
+            -0.07903401247945045,
+            -0.035644721180194586
+          ],
+          "betSim": {
+            "n_bets": 355,
+            "roi": -0.04802816901408452,
+            "roi_ci_low": -0.21956338028169012,
+            "roi_ci_high": 0.12889366197183053,
+            "note": "Flat 1u at closing odds when model - no-vig market >= threshold. Ignores limits, line availability and fees."
+          }
+        },
+        "online_poisson": {
+          "logLoss": 1.0049974119822287,
+          "brier": 0.5996175792089222,
+          "ece": 0.03133242120162528,
+          "vsMarket": [
+            0.016047366574881983,
+            0.000020616193813692973,
+            0.031771051180954024
+          ],
+          "vsBaseline": [
+            -0.05830406395303114,
+            -0.08035516669249533,
+            -0.037493853400281864
+          ],
+          "betSim": {
+            "n_bets": 372,
+            "roi": -0.058817204301075274,
+            "roi_ci_low": -0.21978763440860216,
+            "roi_ci_high": 0.1132392473118279,
+            "note": "Flat 1u at closing odds when model - no-vig market >= threshold. Ignores limits, line availability and fees."
+          }
+        }
+      },
+      "gates": [
+        {
+          "model": "elo_davidson",
+          "status": "experimental_not_publishable",
+          "checks": [
+            {
+              "check": "sample_size",
+              "passed": true,
+              "detail": "800 holdout events (min 300)"
+            },
+            {
+              "check": "beats_naive_baseline",
+              "passed": true,
+              "detail": "log-loss diff vs baseline 95% CI upper = -0.0356 (must be < 0)"
+            },
+            {
+              "check": "calibrated",
+              "passed": false,
+              "detail": "ECE = 0.0329 (max 0.03)"
+            },
+            {
+              "check": "market_parity",
+              "passed": false,
+              "detail": "log-loss diff vs no-vig market = +0.0191 [+0.0022, +0.0362] (upper must be <= 0)"
+            },
+            {
+              "check": "positive_edge_evidence",
+              "passed": false,
+              "detail": "355 simulated bets, ROI -0.048 [CI -0.220, +0.129] (lower bound must be > 0)"
+            }
+          ]
+        },
+        {
+          "model": "online_poisson",
+          "status": "experimental_not_publishable",
+          "checks": [
+            {
+              "check": "sample_size",
+              "passed": true,
+              "detail": "800 holdout events (min 300)"
+            },
+            {
+              "check": "beats_naive_baseline",
+              "passed": true,
+              "detail": "log-loss diff vs baseline 95% CI upper = -0.0375 (must be < 0)"
+            },
+            {
+              "check": "calibrated",
+              "passed": false,
+              "detail": "ECE = 0.0313 (max 0.03)"
+            },
+            {
+              "check": "market_parity",
+              "passed": false,
+              "detail": "log-loss diff vs no-vig market = +0.0160 [+0.0000, +0.0318] (upper must be <= 0)"
+            },
+            {
+              "check": "positive_edge_evidence",
+              "passed": false,
+              "detail": "372 simulated bets, ROI -0.059 [CI -0.220, +0.113] (lower bound must be > 0)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sport": "NFL",
+      "market": "moneyline (home/away), ties excluded",
+      "holdout": {
+        "start": "2023-09-01",
+        "end": "2026-10-26",
+        "events": 921,
+        "withOdds": 921
+      },
+      "source": {
+        "provider": "nflverse/nfldata",
+        "terms": "Community dataset; confirm licence and attribution before commercial use."
+      },
+      "baselines": {
+        "home_rate": {
+          "log_loss": 0.6919442502481867,
+          "brier": 0.2493910773674106
+        },
+        "market_no_vig": {
+          "log_loss": 0.6141386817344338,
+          "brier": 0.21295332183437798
+        }
+      },
+      "models": {
+        "elo_binary": {
+          "logLoss": 0.6403764456047684,
+          "brier": 0.22491109610380966,
+          "ece": 0.04688380565904745,
+          "vsMarket": [
+            0.026237763870334527,
+            0.012254322062851925,
+            0.03984839371264279
+          ],
+          "vsBaseline": [
+            -0.05156780464341844,
+            -0.06960472320817146,
+            -0.03165482290043779
+          ],
+          "betSim": {
+            "n_bets": 705,
+            "roi": -0.10732367948087902,
+            "roi_ci_low": -0.204590704435089,
+            "roi_ci_high": -0.007387954375739265,
+            "note": "Flat 1u at closing odds when model - no-vig market >= threshold. Ignores limits, line availability and fees."
+          }
+        }
+      },
+      "gates": [
+        {
+          "model": "elo_binary",
+          "status": "experimental_not_publishable",
+          "checks": [
+            {
+              "check": "sample_size",
+              "passed": true,
+              "detail": "921 holdout events (min 300)"
+            },
+            {
+              "check": "beats_naive_baseline",
+              "passed": true,
+              "detail": "log-loss diff vs baseline 95% CI upper = -0.0317 (must be < 0)"
+            },
+            {
+              "check": "calibrated",
+              "passed": false,
+              "detail": "ECE = 0.0469 (max 0.03)"
+            },
+            {
+              "check": "market_parity",
+              "passed": false,
+              "detail": "log-loss diff vs no-vig market = +0.0262 [+0.0123, +0.0398] (upper must be <= 0)"
+            },
+            {
+              "check": "positive_edge_evidence",
+              "passed": false,
+              "detail": "705 simulated bets, ROI -0.107 [CI -0.205, -0.007] (lower bound must be > 0)"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

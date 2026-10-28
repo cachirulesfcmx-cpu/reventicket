@@ -1,26 +1,90 @@
 name: CI
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  web-mobile:
+  security:
+    name: security (secrets + dependencies)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: '20', cache: 'npm'}
-      - run: npm install
-      - run: npm run typecheck
+        with: { node-version: 22, cache: npm }
+      - run: node scripts/check-secrets.mjs
+      - run: npm ci
+      - run: npm run audit:gate
+
+  shared:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm --workspace packages/shared run typecheck
+      - run: npm --workspace packages/shared test
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Canary values: the bundle check fails if they ever reach client code.
+      SUPABASE_SERVICE_ROLE_KEY: canary-service-role-7f3a9c
+      CRON_SECRET: canary-cron-secret-2b8e1d
+      PREDICTIONS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm --workspace apps/web run lint
+      - run: npm --workspace apps/web run typecheck
+      - run: npm --workspace apps/web test
       - run: npm run build:web
+      - run: node scripts/check-bundle.mjs
+
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - working-directory: apps/mobile
+        run: |
+          npx tsc --noEmit
+          npx eslint . --max-warnings 0
+          npx jest --runInBand --ci
+          npx expo install --check
+          npx expo-doctor
+          npx expo export --platform android --platform ios --output-dir dist
+
   predictor:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
-      run: {working-directory: services/predictor}
+      run: { working-directory: services/predictor }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: '3.11', cache: 'pip', cache-dependency-path: services/predictor/requirements.txt}
+        with: { python-version: '3.13', cache: pip, cache-dependency-path: services/predictor/requirements.txt }
       - run: pip install -r requirements.txt
-      - run: pytest -q
+      - run: python -m pytest -q
+
+  database:
+    name: database (migrations + RLS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y postgresql
+      - run: bash supabase/tests/run-local.sh
