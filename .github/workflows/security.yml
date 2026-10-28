@@ -1,0 +1,17 @@
+name: Basic security checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for common secret patterns
+        shell: bash
+        run: |
+          if grep -RInE --exclude-dir=.git --exclude='*.md' --exclude='*.lock' '(sk-[A-Za-z0-9]{20,}|service_role[^[:space:]]{0,80}|SUPABASE_SERVICE_ROLE_KEY=[^[:space:]]+|ODDS_API_KEY=[^[:space:]]+)' .; then
+            echo 'Potential secret pattern found. Review output without printing secret values in logs.'
+            exit 1
+          fi

@@ -1,49 +1,35 @@
-# StudIA
+# VANTA EDGE — Sports Intelligence Platform
 
-Aplicación educativa multiplataforma (iOS, Android y web) para estudiantes de primaria, secundaria y preparatoria en México: onboarding “liquid glass”, planes de estudio, tutor IA, simulacros calificados en el servidor, materiales privados con lectura asíncrona y espacio familiar con consentimiento parental.
+Monorepo starter for a mobile-first sports analytics product covering Liga MX, UEFA Champions League, LaLiga, NFL, MLB and NBA. Includes Expo mobile app, Next.js web dashboard/API, Supabase schema with RLS, and a Python prediction-service baseline.
 
-> **Estado:** código listo para staging; despliegue verificado `BLOCKED` (falta proyecto Supabase de staging autorizado). **No** listo para producción ni para uso con menores reales: ver `docs/AUDIT_REPORT.md` y `docs/RELEASE_CHECKLIST.md`.
+> Important: this is a functional development baseline, not a claim of production-grade predictive edge. Demo data is explicitly labeled. No betting transactions, wallets, or wagering integrations are implemented. Probabilities must be validated out-of-sample before being presented as reliable.
 
 ## Stack
+- `apps/mobile`: Expo + React Native + TypeScript
+- `apps/web`: Next.js App Router + TypeScript
+- `packages/shared`: shared sports domain types
+- `services/predictor`: FastAPI + scikit-learn baseline probability service
+- `supabase/migrations`: PostgreSQL schema, RLS, indexes, audit-safe prediction records
+- `.github/workflows`: CI checks
 
-| Capa | Tecnología |
-| --- | --- |
-| App | Expo SDK 58 · React Native 0.88 · React 19.3 · Expo Router 58 · TypeScript 6 |
-| Backend | Supabase (Postgres 17 + RLS, Auth con PKCE, Storage privado, Edge Functions Deno) |
-| IA | Proveedor configurable: Anthropic Messages API u OpenAI-compatible (servidor) |
-| Web | Export estático (`dist/`) servido con CSP estricta (`vercel.json`) |
+## Prerequisites
+Node.js 20+, npm 10+, Python 3.11+, Git. Supabase project and Vercel account are needed for hosted deployment.
 
-## Desarrollo
+## Run locally
+1. `cp .env.example .env.local` and fill in Supabase URL/public key when available. The web dashboard can render demo mode without credentials.
+2. `npm install`
+3. `npm run dev:web` (web at http://localhost:3000)
+4. In another terminal: `npm run dev:mobile` (Expo QR; use Expo Go or simulator)
+5. Predictor: `cd services/predictor && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && uvicorn app:app --reload --port 8001`
 
-```bash
-npm ci
-cp .env.example .env      # completa EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY
-npm run start             # o npm run web / ios / android
-```
+## Supabase setup
+Use Supabase SQL Editor or Supabase CLI to apply migrations in lexical order. Never commit service-role keys. The app uses anon/publishable credentials in clients and RLS for user data. Server-only secrets belong in Vercel environment variables.
 
-Sin variables de Supabase la app arranca igual: el onboarding funciona y las pantallas de cuenta muestran un aviso de configuración.
+## Important release gates
+- Configure a licensed data provider and confirm rights for commercial display, historical storage, logos, player photos and odds.
+- Implement provider adapters and monitor freshness; never fabricate injuries, lineups, odds or live scores.
+- Run chronological walk-forward backtests, compare against baselines and market-implied probabilities, calibrate, and preserve immutable prediction snapshots.
+- `PREDICTIONS_ENABLED` defaults to false. Keep it false until model validation is approved.
+- Verify Apple/Google policies, privacy, subscription and applicable legal requirements before store submission.
 
-## Calidad
-
-```bash
-npm run typecheck      # TypeScript estricto
-npm run lint           # ESLint (expo) sin warnings
-npm test               # Jest: lógica, seguridad del tutor, cliente IA, CORS, contraste, evals
-npm run test:sql       # Postgres local: migraciones + 78 aserciones de RLS/seguridad
-npm run test:rollback  # el rollback de staging revierte y re-aplica limpio
-npm run test:perf      # pgbench: lectura con RLS y cuota IA atómica bajo concurrencia
-npm run build:web && npm run test:e2e   # Playwright sobre el build de producción
-npm run audit:gate     # npm audit con aceptación de riesgos documentada y con caducidad
-```
-
-Edge Functions: `cd supabase/functions && deno check */index.ts && deno lint`.
-
-## Documentación
-
-- `docs/ARCHITECTURE.md` — dominios, flujos y decisiones.
-- `docs/DEPLOYMENT.md` — variables, secretos, despliegue a staging, rollback.
-- `docs/LIQUID_GLASS_ONBOARDING.md` — dirección visual y flujo de 10 pasos.
-- `docs/RELEASE_CHECKLIST.md` — requisitos antes de producción.
-- `docs/AUDIT_REPORT.md` — auditoría, evidencia de pruebas y veredicto.
-
-Nunca pongas secretos en variables `EXPO_PUBLIC_*`. La `service_role` y las claves de IA viven solo en secretos de Edge Functions.
+See `docs/CLAUDE_CODE_DEPLOYMENT_PROMPT.md` for the deployment and verification handoff.

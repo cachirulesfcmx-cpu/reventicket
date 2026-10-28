@@ -3,66 +3,24 @@ on:
   push:
     branches: [main]
   pull_request:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
+    branches: [main]
 jobs:
-  app:
+  web-mobile:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+        with: {node-version: '20', cache: 'npm'}
+      - run: npm install
       - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test -- --ci --coverage
-      - name: Dependency audit (fails on unaccepted high/critical advisories)
-        run: npm run audit:gate
-      - name: Expo dependency compatibility
-        run: npx expo install --check
       - run: npm run build:web
-      - name: E2E (web, Chromium)
-        run: |
-          npm install --no-save playwright@1.63.0
-          npx playwright install --with-deps chromium
-          npm run test:e2e
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-screenshots
-          path: e2e/artifacts/
-          if-no-files-found: ignore
-
-  database:
+  predictor:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    defaults:
+      run: {working-directory: services/predictor}
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql
-      - name: Migrations + RLS / security suite
-        run: npm run test:sql
-      - name: Staging rollback script reverses migrations
-        run: npm run test:rollback
-
-  edge-functions:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      - working-directory: supabase/functions
-        run: |
-          deno check */index.ts
-          deno lint
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11', cache: 'pip', cache-dependency-path: services/predictor/requirements.txt}
+      - run: pip install -r requirements.txt
+      - run: pytest -q

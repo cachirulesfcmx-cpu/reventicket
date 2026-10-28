@@ -1,0 +1,163 @@
+{
+  "sport": "NFL",
+  "market": "moneyline (home/away), ties excluded",
+  "events_total": 7074,
+  "dev_events": 5903,
+  "holdout_events": 921,
+  "holdout_start": "2023-09-01",
+  "holdout_end": "2026-10-26",
+  "holdout_events_with_odds": 921,
+  "chosen_params": {
+    "elo_binary": {
+      "params": {
+        "k": 20,
+        "home_adv": 48,
+        "season_regress": 0.5
+      },
+      "dev_log_loss": 0.6295882792891992
+    }
+  },
+  "baselines": {
+    "home_rate": {
+      "log_loss": 0.6919442502481867,
+      "brier": 0.2493910773674106
+    },
+    "market_no_vig": {
+      "log_loss": 0.6141386817344338,
+      "brier": 0.21295332183437798
+    }
+  },
+  "models": {
+    "elo_binary": {
+      "log_loss": 0.6403764456047684,
+      "brier": 0.22491109610380966,
+      "log_loss_on_odds_subset": 0.6403764456047684,
+      "ece_home_win": 0.04688380565904745,
+      "calibration_home_win": [
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 8,
+          "mean_predicted": 0.16419522671758424,
+          "observed_rate": 0.125
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.30000000000000004,
+          "count": 35,
+          "mean_predicted": 0.26180866111305395,
+          "observed_rate": 0.42857142857142855
+        },
+        {
+          "lower": 0.30000000000000004,
+          "upper": 0.4,
+          "count": 89,
+          "mean_predicted": 0.35912611466795885,
+          "observed_rate": 0.2808988764044944
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 179,
+          "mean_predicted": 0.45490927911142615,
+          "observed_rate": 0.3854748603351955
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6000000000000001,
+          "count": 220,
+          "mean_predicted": 0.5501475081924615,
+          "observed_rate": 0.4909090909090909
+        },
+        {
+          "lower": 0.6000000000000001,
+          "upper": 0.7000000000000001,
+          "count": 199,
+          "mean_predicted": 0.6475791760541937,
+          "observed_rate": 0.6532663316582915
+        },
+        {
+          "lower": 0.7000000000000001,
+          "upper": 0.8,
+          "count": 144,
+          "mean_predicted": 0.7437017202673059,
+          "observed_rate": 0.7291666666666666
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 43,
+          "mean_predicted": 0.836842170694077,
+          "observed_rate": 0.8604651162790697
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 4,
+          "mean_predicted": 0.9085722438496093,
+          "observed_rate": 1.0
+        }
+      ],
+      "log_loss_diff_vs_climatology": [
+        -0.05156780464341844,
+        -0.06960472320817146,
+        -0.03165482290043779
+      ],
+      "log_loss_diff_vs_market": [
+        0.026237763870334527,
+        0.012254322062851925,
+        0.03984839371264279
+      ],
+      "bet_sim": {
+        "n_bets": 705,
+        "roi": -0.10732367948087902,
+        "roi_ci_low": -0.204590704435089,
+        "roi_ci_high": -0.007387954375739265,
+        "note": "Flat 1u at closing odds when model - no-vig market >= threshold. Ignores limits, line availability and fees."
+      }
+    }
+  },
+  "gates": [
+    {
+      "model": "elo_binary",
+      "sport": "NFL",
+      "checks": [
+        {
+          "check": "sample_size",
+          "passed": true,
+          "detail": "921 holdout events (min 300)"
+        },
+        {
+          "check": "beats_naive_baseline",
+          "passed": true,
+          "detail": "log-loss diff vs baseline 95% CI upper = -0.0317 (must be < 0)"
+        },
+        {
+          "check": "calibrated",
+          "passed": false,
+          "detail": "ECE = 0.0469 (max 0.03)"
+        },
+        {
+          "check": "market_parity",
+          "passed": false,
+          "detail": "log-loss diff vs no-vig market = +0.0262 [+0.0123, +0.0398] (upper must be <= 0)"
+        },
+        {
+          "check": "positive_edge_evidence",
+          "passed": false,
+          "detail": "705 simulated bets, ROI -0.107 [CI -0.205, -0.007] (lower bound must be > 0)"
+        }
+      ],
+      "automatic_checks_passed": false,
+      "publication_allowed": false,
+      "status": "experimental_not_publishable"
+    }
+  ],
+  "source": {
+    "provider": "nflverse/nfldata",
+    "terms": "Community dataset; confirm licence and attribution before commercial use.",
+    "url": "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+  },
+  "generated_by": "vanta_predictor 0.2.0",
+  "runtime_seconds": 0.5
+}
