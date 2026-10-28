@@ -1,12 +1,18 @@
 import type { NextConfig } from 'next';
 
+// Vercel injects its toolbar (vercel.live) into preview deployments only; allow it there and
+// keep the production policy strict.
+const preview = process.env.VERCEL_ENV === 'preview';
+const live = preview ? ' https://vercel.live' : '';
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
+  `script-src 'self' 'unsafe-inline'${live}`,
+  `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com${live}`,
+  `font-src 'self' https://fonts.gstatic.com${preview ? ' https://vercel.live https://assets.vercel.com' : ''}`,
   "img-src 'self' data: https:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  `connect-src 'self' https://*.supabase.co wss://*.supabase.co${preview ? ' https://vercel.live wss://ws-us3.pusher.com' : ''}`,
+  `frame-src${preview ? ' https://vercel.live' : " 'none'"}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

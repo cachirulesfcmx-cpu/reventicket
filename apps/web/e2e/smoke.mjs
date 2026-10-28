@@ -12,9 +12,14 @@ mkdirSync(OUT, { recursive: true });
 const PAGES = ['/', '/games', '/games?sport=LIGA_MX', '/games/demo-nfl-7', '/picks', '/performance', '/follows', '/responsible'];
 const results = [];
 const browser = await chromium.launch();
+// Protected Vercel previews: pass a temporary share token via VERCEL_SHARE_TOKEN (never commit it).
+async function prime(page) {
+  if (process.env.VERCEL_SHARE_TOKEN) await page.goto(`${BASE}/?_vercel_share=${process.env.VERCEL_SHARE_TOKEN}`, { waitUntil: 'networkidle' });
+}
 
 for (const [label, viewport] of [['phone', { width: 390, height: 844 }], ['desktop', { width: 1280, height: 800 }]]) {
   const page = await browser.newPage({ viewport });
+  await prime(page);
   const problems = [];
   page.on('console', (m) => { if (m.type() === 'error') problems.push(`console: ${m.text().slice(0, 160)}`); });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message.slice(0, 160)}`));
@@ -43,6 +48,7 @@ for (const [label, viewport] of [['phone', { width: 390, height: 844 }], ['deskt
 }
 
 const page = await browser.newPage();
+await prime(page);
 const nf = await page.goto(BASE + '/games/no-existe');
 results.push({ name: 'unknown game returns 404', ok: nf.status() === 404, error: `HTTP ${nf.status()}` });
 const api = await (await page.request.get(BASE + '/api/picks')).json();
