@@ -1,0 +1,25 @@
+# StudIA Supabase CLI config. project_id is the local stack name, not a cloud ref.
+project_id = "studia"
+
+[auth]
+site_url = "http://localhost:8081"
+additional_redirect_urls = ["studia://auth/callback", "http://localhost:8081/auth/callback"]
+minimum_password_length = 10
+password_requirements = "lower_upper_letters_digits"
+
+[auth.email]
+enable_confirmations = true
+double_confirm_changes = true
+
+[functions.tutor]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+# Worker authenticates with WORKER_SECRET instead of a user JWT.
+[functions.process-materials]
+verify_jwt = false
+
+[functions.health]
+verify_jwt = false

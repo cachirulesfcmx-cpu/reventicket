@@ -1,48 +1,49 @@
-# RevenTicket 🎟️
+# StudIA
 
-Plataforma de reventa de boletos para México. Toda la comunicación vía WhatsApp.
+Aplicación educativa multiplataforma (iOS, Android y web) para estudiantes de primaria, secundaria y preparatoria en México: onboarding “liquid glass”, planes de estudio, tutor IA, simulacros calificados en el servidor, materiales privados con lectura asíncrona y espacio familiar con consentimiento parental.
+
+> **Estado:** código listo para staging; despliegue verificado `BLOCKED` (falta proyecto Supabase de staging autorizado). **No** listo para producción ni para uso con menores reales: ver `docs/AUDIT_REPORT.md` y `docs/RELEASE_CHECKLIST.md`.
 
 ## Stack
-- **Frontend**: React 19 + TypeScript + Wouter + TanStack Query
-- **Backend**: Express 5 + TypeScript
-- **DB**: PostgreSQL + Drizzle ORM
-- **WhatsApp**: whatsapp-web.js (OTP, confirmaciones, entrega de boletos)
-- **Pagos**: Tarjeta / SPEI / OXXO
 
-## Setup en Replit
+| Capa | Tecnología |
+| --- | --- |
+| App | Expo SDK 58 · React Native 0.88 · React 19.3 · Expo Router 58 · TypeScript 6 |
+| Backend | Supabase (Postgres 17 + RLS, Auth con PKCE, Storage privado, Edge Functions Deno) |
+| IA | Proveedor configurable: Anthropic Messages API u OpenAI-compatible (servidor) |
+| Web | Export estático (`dist/`) servido con CSP estricta (`vercel.json`) |
 
-1. Importa este ZIP como proyecto Replit
-2. Las variables de entorno ya están en `.env.example` — cópialas en Secrets
-3. Ejecuta `npm run db:push` para crear las tablas
-4. Ejecuta `npm run db:seed` para poblar datos de ejemplo
-5. Haz clic en **Run**
+## Desarrollo
 
-## Variables de entorno requeridas
-| Variable | Descripción |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string (auto-provisto por Replit) |
-| `SESSION_SECRET` | String aleatorio para sesiones |
-| `WHATSAPP_ENABLED` | `true` para activar el bot de WhatsApp |
-| `JOBS_ENABLED` | `true` para recordatorios automáticos |
+```bash
+npm ci
+cp .env.example .env      # completa EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY
+npm run start             # o npm run web / ios / android
+```
 
-## WhatsApp Bot
-Cuando `WHATSAPP_ENABLED=true`, el bot:
-1. Genera un QR en los logs del servidor
-2. Escanéalo con WhatsApp en tu teléfono
-3. El bot enviará OTPs, confirmaciones y boletos automáticamente
+Sin variables de Supabase la app arranca igual: el onboarding funciona y las pantallas de cuenta muestran un aviso de configuración.
 
-## Admin Panel
-Accede en `/admin/login`
-- Email: `admin@reventicket.com`
-- Password: `admin123`
+## Calidad
 
-## Funciones
-- ✅ OTP login vía WhatsApp (sin contraseñas)
-- ✅ Mapa interactivo de venue con selección de zona
-- ✅ Compra de boletos con tarjeta / SPEI / OXXO
-- ✅ Seguro de cancelación opcional
-- ✅ Entrega de boletos por WhatsApp
-- ✅ Panel admin: eventos, órdenes, WhatsApp status
-- ✅ Anti-scalping y engine de riesgo
-- ✅ Analytics de conversión
-- ✅ Carrito abandonado con recordatorio automático
+```bash
+npm run typecheck      # TypeScript estricto
+npm run lint           # ESLint (expo) sin warnings
+npm test               # Jest: lógica, seguridad del tutor, cliente IA, CORS, contraste, evals
+npm run test:sql       # Postgres local: migraciones + 78 aserciones de RLS/seguridad
+npm run test:rollback  # el rollback de staging revierte y re-aplica limpio
+npm run test:perf      # pgbench: lectura con RLS y cuota IA atómica bajo concurrencia
+npm run build:web && npm run test:e2e   # Playwright sobre el build de producción
+npm run audit:gate     # npm audit con aceptación de riesgos documentada y con caducidad
+```
+
+Edge Functions: `cd supabase/functions && deno check */index.ts && deno lint`.
+
+## Documentación
+
+- `docs/ARCHITECTURE.md` — dominios, flujos y decisiones.
+- `docs/DEPLOYMENT.md` — variables, secretos, despliegue a staging, rollback.
+- `docs/LIQUID_GLASS_ONBOARDING.md` — dirección visual y flujo de 10 pasos.
+- `docs/RELEASE_CHECKLIST.md` — requisitos antes de producción.
+- `docs/AUDIT_REPORT.md` — auditoría, evidencia de pruebas y veredicto.
+
+Nunca pongas secretos en variables `EXPO_PUBLIC_*`. La `service_role` y las claves de IA viven solo en secretos de Edge Functions.
