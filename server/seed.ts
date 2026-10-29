@@ -4,6 +4,16 @@ import bcrypt from "bcrypt";
 import { sql } from "drizzle-orm";
 
 async function seed() {
+  // The seed TRUNCATEs users, orders and tickets: never against production.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("db:seed is disabled in production (it truncates every table)");
+  }
+  // Credentials come from the environment; nothing secret lives in the repository.
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const buyerPassword = process.env.SEED_BUYER_PASSWORD;
+  if (!adminPassword || adminPassword.length < 12 || !buyerPassword || buyerPassword.length < 12) {
+    throw new Error("Set SEED_ADMIN_PASSWORD and SEED_BUYER_PASSWORD (12+ characters) to run the seed");
+  }
   console.log("🌱 Iniciando seed de base de datos con datos reales de StubHub México...");
 
   // Limpiar tablas existentes
@@ -12,7 +22,7 @@ async function seed() {
 
   // 1. Crear usuario administrador
   console.log("Creando usuario admin...");
-  const hashedPassword = await bcrypt.hash("admin123", 10);
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
   const [admin] = await db.insert(users).values({
     email: "admin@reventicket.com",
     password: hashedPassword,
@@ -22,7 +32,7 @@ async function seed() {
   }).returning();
 
   // Crear usuario de prueba
-  const hashedUserPassword = await bcrypt.hash("test123", 10);
+  const hashedUserPassword = await bcrypt.hash(buyerPassword, 10);
   await db.insert(users).values({
     email: "usuario@test.com",
     password: hashedUserPassword,
