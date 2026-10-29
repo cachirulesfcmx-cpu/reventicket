@@ -18,7 +18,8 @@
     "check:secrets": "node scripts/check-secrets.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
     "audit:gate": "node scripts/audit-gate.mjs",
-    "test:rollback": "bash supabase/tests/rollback.test.sh"
+    "test:rollback": "bash supabase/tests/rollback.test.sh",
+    "test:reventicket-proposal": "bash supabase/proposals/reventicket/test/run.sh"
   },
   "engines": {
     "node": ">=20.19.0"
