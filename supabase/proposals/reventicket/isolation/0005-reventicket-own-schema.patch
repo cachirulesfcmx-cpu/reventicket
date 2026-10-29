@@ -12,13 +12,13 @@ index 4cd7b4c..eb9d98f 100644
      url: process.env.DATABASE_URL,
    },
 diff --git a/shared/schema.ts b/shared/schema.ts
-index f17701e..2fadca0 100644
+index f17701e..53d8acf 100644
 --- a/shared/schema.ts
 +++ b/shared/schema.ts
 @@ -1,10 +1,13 @@
  import { sql } from "drizzle-orm";
 -import { pgTable, text, varchar, integer, timestamp, decimal, boolean, json } from "drizzle-orm/pg-core";
-+import { pgSchema, text, varchar, integer, timestamp, decimal, boolean, json } from "drizzle-orm/pg-core";
++import { pgSchema, text, varchar, integer, timestamp, decimal, boolean, json, uuid, index } from "drizzle-orm/pg-core";
 +
 +// All RevenTicket tables live in their own schema, isolated from other apps in `public`.
 +export const reventicketSchema = pgSchema("reventicket");
@@ -220,3 +220,26 @@ index f17701e..2fadca0 100644
    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
    eventId: varchar("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
    name: text("name").notNull(),
+@@ -450,3 +453,22 @@ export const eventMaps = pgTable("event_maps", {
+ export const insertEventMapSchema = createInsertSchema(eventMaps).omit({ id: true, createdAt: true, updatedAt: true });
+ export type InsertEventMap = z.infer<typeof insertEventMapSchema>;
+ export type EventMap = typeof eventMaps.$inferSelect;
++
++// ─── TABLES CREATED AT RUNTIME (declared so drizzle-kit never renames or drops them) ─────────────────────────
++// connect-pg-simple session store (server/routes.ts); created by the schema move, not by createTableIfMissing.
++export const sessions = reventicketSchema.table("session", {
++  sid: varchar("sid").primaryKey(),
++  sess: json("sess").notNull(),
++  expire: timestamp("expire", { precision: 6 }).notNull(),
++}, (t) => [index("session_expire_idx").on(t.expire)]);
++
++// Web push subscriptions (server/lib/push-notifications.ts ensurePushTable()).
++export const pushSubscriptions = reventicketSchema.table("push_subscriptions", {
++  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
++  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
++  endpoint: text("endpoint").notNull().unique(),
++  p256dh: text("p256dh").notNull(),
++  auth: text("auth").notNull(),
++  role: text("role").notNull().default("admin"),
++  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
++});

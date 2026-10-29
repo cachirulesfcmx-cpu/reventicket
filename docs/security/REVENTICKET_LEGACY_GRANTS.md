@@ -177,6 +177,8 @@ se tocan en ningún caso.
 
 ## 7. Alternativa recomendada: esquema propio para RevenTicket (aislamiento de VANTA)
 
+**Elegida por el usuario (Plan B). Plan detallado, inventario, pruebas (27/27 en PG16/17) y rollback: `REVENTICKET_PLAN_B.md`.**
+
 Investigado y probado en local; **no se cambió** `search_path`, esquemas ni variables de producción.
 Detalle y resultados: `REVENTICKET_APP_FINDINGS.md` (F4) y `supabase/proposals/reventicket/isolation/`.
 

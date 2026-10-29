@@ -3,7 +3,7 @@
 Auditoría del código de `main` (`1903f11`) con pruebas contra el **backend real** (`node dist/index.cjs`, el bundle
 que arranca Railway) en bases PostgreSQL 17 locales y desechables, con datos y secretos ficticios.
 
-**Estado:** correcciones integradas en la rama **local** `reventicket-security-fixes` (base `origin/main`, 4 commits),
+**Estado:** correcciones publicadas en la rama `reventicket-security-fixes` (PR #1 en borrador contra `main`, sin fusionar) (base `origin/main`, 4 commits),
 exportadas aquí como serie de parches. **No están en `main`, no están desplegadas y no se ha tocado ninguna base
 remota.** Producción no está corregida mientras no se fusionen y desplieguen.
 
@@ -37,7 +37,7 @@ Aplicación en un checkout de RevenTicket: `git am docs/…/000[1-3]-*.patch && 
   excepción); `null` lanzaría, pero la columna es `NOT NULL`. Contraseña errónea y email inexistente ⇒ 401.
 - **Riesgo operativo:** si la contraseña del admin remoto se guardó en claro (existe una consulta guardada
   "Reset Admin User Password" en el SQL Editor), tras el parche ese admin no podrá entrar. Antes de desplegar:
-  generar un hash bcrypt localmente (`node -e "require('bcrypt').hash(process.argv[1],12).then(console.log)" '<nueva>'`)
+  generar un hash bcrypt localmente (`read -rsp 'Nueva contraseña: ' p; echo; printf '%s' "$p" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>require('bcrypt').hash(s,12).then(console.log))"; unset p` (la contraseña no queda en argumentos ni en el historial))
   y actualizarlo con autorización; después **borrar `ADMIN_PASSWORD`** de Railway/Vercel y rotarla.
 - Observación (sin cambio): login limitado por el limitador global (~100/15 min por IP; medido 429 tras 93).
   Recomendado un limitador específico más estricto.
@@ -68,7 +68,7 @@ Aplicación en un checkout de RevenTicket: `git am docs/…/000[1-3]-*.patch && 
 - Verificado: producción ⇒ "db:seed is disabled in production"; sin variables o cortas ⇒ error, antes de tocar la base.
 - Las contraseñas siguen en el **historial** de git de `main`: si alguna cuenta real usa esas credenciales, rotarlas.
 
-## F4 · MEDIO — Esquema remoto desfasado → propuesta de aislamiento (no aplicada)
+## F4 · MEDIO — Esquema remoto desfasado → Plan B elegido (no aplicado; ver `REVENTICKET_PLAN_B.md`)
 
 Inventario completo en `REVENTICKET_SCHEMA_INVENTORY.md`: el backend necesita 24 tablas; en remoto hay 8; faltan 16;
 `otp_codes.used` (remoto) vs `verified` (código); falta `events.is_featured`. Efectos: OTP, listado/borrado de eventos
