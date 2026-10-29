@@ -3,6 +3,7 @@ const { Client, LocalAuth } = pkg;
 import qrcode from "qrcode-terminal";
 import * as fs from "fs";
 import * as path from "path";
+import { generateOtpCode } from "./lib/otp";
 
 const SESSION_PATH = "/tmp/wwebjs_session";
 const WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED === "true";
@@ -162,7 +163,7 @@ class WhatsAppService {
   }
 
   generateOTP(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return generateOtpCode();
   }
 
   async sendOTP(phone: string, code: string): Promise<boolean> {

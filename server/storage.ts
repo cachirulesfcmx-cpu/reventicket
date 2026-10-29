@@ -35,6 +35,7 @@ import {
 import { db, pool } from "./db";
 import { eq, and, desc, gte, lt, isNull, sql } from "drizzle-orm";
 import { getFeeRate, calculateServerFees } from "./lib/fees";
+import { hashOtp, otpHashMatches } from "./lib/otp";
 
 export interface AtomicPurchaseResult {
   success: boolean;
@@ -96,6 +97,7 @@ export interface IStorage {
   createOtpCode(otp: InsertOtpCode): Promise<OtpCode>;
   getValidOtpCode(phone: string, code: string): Promise<OtpCode | undefined>;
   markOtpVerified(id: string): Promise<OtpCode | undefined>;
+  expireActiveOtpCodes(phone: string): Promise<void>;
   
   // Carts
   createCart(cart: InsertCart): Promise<Cart>;
@@ -274,30 +276,37 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // OTP
+  // OTP (only HMACs are stored; see server/lib/otp.ts)
   async createOtpCode(otp: InsertOtpCode): Promise<OtpCode> {
-    const result = await db.insert(otpCodes).values(otp).returning();
+    // A new code invalidates any code still active for the same phone.
+    await this.expireActiveOtpCodes(otp.phone);
+    const result = await db.insert(otpCodes).values({ ...otp, code: hashOtp(otp.phone, otp.code) }).returning();
     return result[0];
   }
 
   async getValidOtpCode(phone: string, code: string): Promise<OtpCode | undefined> {
-    const result = await db.select().from(otpCodes)
+    const candidates = await db.select().from(otpCodes)
       .where(and(
         eq(otpCodes.phone, phone),
-        eq(otpCodes.code, code),
         eq(otpCodes.verified, false),
         gte(otpCodes.expiresAt, new Date())
-      ))
-      .limit(1);
-    return result[0];
+      ));
+    return candidates.find((row) => otpHashMatches(row.code, phone, code));
   }
 
+  // Atomic: only one request can consume a given code.
   async markOtpVerified(id: string): Promise<OtpCode | undefined> {
     const result = await db.update(otpCodes)
       .set({ verified: true })
-      .where(eq(otpCodes.id, id))
+      .where(and(eq(otpCodes.id, id), eq(otpCodes.verified, false)))
       .returning();
     return result[0];
+  }
+
+  async expireActiveOtpCodes(phone: string): Promise<void> {
+    await db.update(otpCodes)
+      .set({ expiresAt: new Date() })
+      .where(and(eq(otpCodes.phone, phone), eq(otpCodes.verified, false), gte(otpCodes.expiresAt, new Date())));
   }
 
   // Carts

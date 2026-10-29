@@ -6,6 +6,8 @@ import { signToken, verifyToken, requireJWT, requireJWTAdmin } from "./lib/jwt-a
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { insertUserSchema, insertEventSchema, insertZoneSchema, insertTicketSchema, insertOrderSchema } from "@shared/schema";
+import { randomBytes } from "crypto";
+import { recordOtpFailure, clearOtpFailures, MAX_OTP_FAILURES } from "./lib/otp";
 import { whatsappService } from "./whatsapp";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -810,17 +812,24 @@ export async function registerRoutes(
       const otpRecord = await storage.getValidOtpCode(phone, code);
 
       if (!otpRecord) {
+        if (recordOtpFailure(phone) >= MAX_OTP_FAILURES) {
+          await storage.expireActiveOtpCodes(phone);
+        }
         return res.status(400).json({ error: "Código inválido o expirado" });
       }
 
-      await storage.markOtpVerified(otpRecord.id);
+      // Consume atomically: a concurrent request with the same code gets the same error.
+      if (!(await storage.markOtpVerified(otpRecord.id))) {
+        return res.status(400).json({ error: "Código inválido o expirado" });
+      }
+      clearOtpFailures(phone);
 
       // Buscar o crear usuario por teléfono (email sintético)
       const phoneEmail = `${phone}@reventicket.mx`;
       let user = await storage.getUserByEmail(phoneEmail);
       if (!user) {
         // Usuario nuevo — crear con datos mínimos
-        const randomPw = Math.random().toString(36) + Date.now().toString(36);
+        const randomPw = randomBytes(32).toString("hex");
         const hashedPw = await bcrypt.hash(randomPw, 10);
         user = await storage.createUser({
           email: phoneEmail,
