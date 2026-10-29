@@ -1,7 +1,8 @@
 -- Remote verification of the hardening migration on the real Supabase project.
 -- Runs the full RLS/security suite inside ONE transaction and rolls everything back:
 -- fixtures, test users, the temporary schema and any writes disappear at the end.
--- Assertion failures raise and abort (the transaction is rolled back either way).
+-- Assertion failures raise 'ASSERTION FAILED: ...'. On success the script ends with the error
+-- 'VANTA_REMOTE_SUITE_PASSED: 41 assertions passed ...' which forces the rollback.
 begin;
 -- VANTA EDGE RLS / security suite. Every assertion raises on failure.
 create schema vanta_test_tmp;
@@ -10,12 +11,13 @@ create function vanta_test_tmp.ok(cond boolean, msg text) returns void language 
 begin
   if cond is distinct from true then raise exception 'ASSERTION FAILED: %', msg; end if;
   raise notice 'ok - %', msg;
+  perform set_config('vanta_test.passed', (coalesce(nullif(current_setting('vanta_test.passed', true), ''), '0')::int + 1)::text, true);
 end $$;
 create function vanta_test_tmp.throws(sql text, pattern text, msg text) returns void language plpgsql as $$
 begin
   begin execute sql;
   exception when others then
-    if sqlerrm ~* pattern then raise notice 'ok - %', msg; return; end if;
+    if sqlerrm ~* pattern then raise notice 'ok - %', msg; perform set_config('vanta_test.passed', (coalesce(nullif(current_setting('vanta_test.passed', true), ''), '0')::int + 1)::text, true); return; end if;
     raise exception 'ASSERTION FAILED: % (unexpected error: %)', msg, sqlerrm;
   end;
   raise exception 'ASSERTION FAILED: % (statement succeeded)', msg;
@@ -130,5 +132,11 @@ update public.model_versions set approved_for_publication = false, approved_at =
 set role anon;
 select vanta_test_tmp.ok(vanta_test_tmp.n('select id from public.predictions') = 0, 'revoking model approval hides its predictions');
 reset role;
-select 'REMOTE SECURITY SUITE PASSED' as result;
+-- Final step: abort on purpose so nothing can be committed, even if the client wraps the script
+-- in its own transaction. Success is reported through this error message.
+reset role;
+do $$ begin
+  raise exception 'VANTA_REMOTE_SUITE_PASSED: % assertions passed; all test changes rolled back',
+    current_setting('vanta_test.passed', true);
+end $$;
 rollback;

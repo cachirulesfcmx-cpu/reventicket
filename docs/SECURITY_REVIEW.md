@@ -25,9 +25,25 @@
 
 ## Pendiente / riesgos aceptados
 
-- **Migración de seguridad aún no aplicada en remoto** (requiere tu confirmación en Supabase). Hoy las tablas están vacías.
+- **Migración de seguridad aplicada en remoto (2026-10-29)**, verificada estructuralmente (objetos, políticas, privilegios y funciones; ver tabla abajo). **Las 41 aserciones de `supabase/tests/remote_verify.sql` aún no se han ejecutado en remoto**: el intento quedó sin confirmación del usuario. Hasta entonces, la evidencia de comportamiento es la local/CI (41/41).
+- Tablas de RevenTicket en el mismo proyecto (`config`, `events`, `orders`, `otp_codes`, `tickets`, `users`, `venues`, `zones`) conservan TODOS los privilegios de tabla para `anon`/`authenticated` (solo RLS los frena). No pertenecen a VANTA y no se tocaron; conviene revisarlas aparte.
 - `script-src 'unsafe-inline'` necesario para Next sin nonces; mejora futura: CSP con nonce.
 - Rate limit en memoria: añadir reglas de Vercel Firewall en producción.
 - GHSA-mrhx-c7xc-m3w5 (zod 3 dentro de `@expo/cli`, herramienta de desarrollo): aceptado hasta 2027-01-31 en `docs/security/audit-allowlist.json`.
 - La declaración de mayoría de edad no verifica identidad; revisar requisitos legales (México: Ley Federal de Juegos y Sorteos, LFPDPPP) y políticas de Apple/Google para apps de apuestas/análisis deportivo.
 - Contraseña mínima de 10 caracteres en cliente; configurar la misma política y confirmación de correo en Supabase Auth.
+
+## Verificación remota (Supabase `reventicket`, 2026-10-29)
+
+| Comprobación | Resultado |
+|---|---|
+| Proyecto | `jxdyrzbeykhswpndoing` = reventicket (MelatePro es `mvdomupjwfrapbqwczux`) |
+| Historial | Solo `vanta_initial_schema`: la migración de seguridad se aplicó por SQL Editor, que no registra historial |
+| Triggers | `vanta_on_auth_user_created`, `vanta_predictions_guard`, `vanta_predictions_no_delete` (único trigger en `auth.users`) |
+| Tablas/vistas | `data_sources`, `ingestion_runs` con RLS; `data_freshness` y `published_performance` con `security_invoker=true` |
+| Políticas públicas | Sin política de cuotas; predicciones solo de modelos aprobados; `data_sources` solo atribución |
+| Privilegios VANTA | `anon`: sin privilegios de tabla en las tablas VANTA (solo grants por columna y SELECT en las 2 vistas); sin SELECT sobre `games.raw_metadata`, `predictions.feature_snapshot`, `odds_snapshots`, `ingestion_runs`, `profiles` |
+| Funciones | 4 funciones con `search_path=''`; solo `vanta_handle_new_user` es `SECURITY DEFINER`; `anon` sin EXECUTE |
+| Defaults | `notifications_enabled` = `false` |
+| Datos | 0 filas en tablas VANTA, 0 usuarios, sin esquema `vanta_test_tmp` (antes del intento de pruebas) |
+| Suite de 41 aserciones | **Pendiente**: no ejecutada en remoto. Validada localmente con el mismo archivo: 41/41, 0 residuos |

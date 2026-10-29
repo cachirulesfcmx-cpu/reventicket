@@ -12,10 +12,10 @@ Leyenda: **Verificado local** = ejecutado en este entorno · **Verificado CI** =
 | App Expo | Completo (modo demo) | tsc · lint · 3 tests · expo-doctor 20/20 · export Android+iOS | Builds EAS (bloqueado: cuenta) |
 | Predictor | Completo (investigación) | 43 tests; backtests reales Liga MX y NFL | Datos para UCL/LaLiga/MLB/NBA |
 | Migración inicial | Aplicada · Remoto | `vanta_initial_schema` en Supabase `reventicket` | — |
-| Migración de seguridad | **Pendiente** | 41/41 local + CI; tres intentos remotos sin confirmación del usuario a tiempo (sin cambios parciales) | Aprobar el aviso de Supabase o pegar el SQL en el SQL Editor; luego ejecutar `supabase/tests/remote_verify.sql` (transacción con ROLLBACK) |
+| Migración de seguridad | **Aplicada · Remoto (verificación estructural)** | Aplicada manualmente por el usuario en el SQL Editor el 2026-10-29 (no figura en `list_migrations`, esperado con el SQL Editor). Comprobado en remoto: 3 triggers `vanta_*`, `data_sources`, `ingestion_runs`, 2 vistas `security_invoker`, 5 columnas nuevas, `model_approval_evidence`, política de cuotas eliminada, funciones con `search_path=''` y sin EXECUTE para `anon` | Ejecutar `supabase/tests/remote_verify.sql` (41 aserciones; el intento del 2026-10-29 quedó sin confirmación del usuario y **no se ejecutó**) |
 | CI GitHub Actions | Completo · Verificado | Run 40730242936: 6/6 jobs success | — |
 | Vercel Preview | Completo · Remoto | `dpl_GyYm9dtyJtRPxPra2P9noVhnvc3S` READY (commit `f08dbcb`), smoke 22/22 | Proyecto propio `vanta-edge` antes de producción |
 | Proveedor de datos real | **Bloqueado** | Sin clave/licencia | Ver `DATA_PROVIDER_MATRIX.md` |
 | Picks reales | Desactivados a propósito | Gate: 0/3 modelos aprobados | — |
 | Builds EAS / tiendas | **Bloqueado** | Sin cuenta Expo/Apple/Google | — |
-| MelatePro | Intacto | No se ejecutó ninguna operación sobre `mvdomupjwfrapbqwczux` | — |
+| MelatePro | Intacto | Solo lecturas; última migración sigue siendo `029_melate_draw_evaluations` (20261028003612) al 2026-10-29 | — |
