@@ -12,7 +12,7 @@ Leyenda: **Verificado local** = ejecutado en este entorno · **Verificado CI** =
 | App Expo | Completo (modo demo) | tsc · lint · 3 tests · expo-doctor 20/20 · export Android+iOS | Builds EAS (bloqueado: cuenta) |
 | Predictor | Completo (investigación) | 43 tests; backtests reales Liga MX y NFL | Datos para UCL/LaLiga/MLB/NBA |
 | Migración inicial | Aplicada · Remoto | `vanta_initial_schema` en Supabase `reventicket` | — |
-| Migración de seguridad | **Aplicada · Remoto (verificación estructural)** | Aplicada manualmente por el usuario en el SQL Editor el 2026-10-29 (no figura en `list_migrations`, esperado con el SQL Editor). Comprobado en remoto: 3 triggers `vanta_*`, `data_sources`, `ingestion_runs`, 2 vistas `security_invoker`, 5 columnas nuevas, `model_approval_evidence`, política de cuotas eliminada, funciones con `search_path=''` y sin EXECUTE para `anon` | Ejecutar `supabase/tests/remote_verify.sql` (versión atómica de `51d5d9c`; 41 aserciones). Dos intentos el 2026-10-29 sin confirmación a tiempo: **no ejecutado** |
+| Migración de seguridad | **Aplicada y verificada · Remoto** | Aplicada por SQL Editor (2026-10-29). Estructura comprobada y **41/41 aserciones PASSED en el proyecto real** (`remote_verify.sql` de `51d5d9c`); 0 residuos tras la suite | — |
 | CI GitHub Actions | Completo · Verificado | Run 40730242936: 6/6 jobs success | — |
 | Vercel Preview | Completo · Remoto | `dpl_GyYm9dtyJtRPxPra2P9noVhnvc3S` READY (commit `f08dbcb`), smoke 22/22 | Proyecto propio `vanta-edge` antes de producción |
 | Proveedor de datos real | **Bloqueado** | Sin clave/licencia | Ver `DATA_PROVIDER_MATRIX.md` |

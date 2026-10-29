@@ -25,7 +25,7 @@
 
 ## Pendiente / riesgos aceptados
 
-- **Migración de seguridad aplicada en remoto (2026-10-29)**, verificada estructuralmente (objetos, políticas, privilegios y funciones; ver tabla abajo). **Las 41 aserciones de `supabase/tests/remote_verify.sql` aún no se han ejecutado en remoto**: el intento quedó sin confirmación del usuario. Hasta entonces, la evidencia de comportamiento es la local/CI (41/41).
+- **Migración de seguridad aplicada en remoto (2026-10-29)** y verificada: estructura (tabla abajo) y comportamiento (**41/41 aserciones en el proyecto real**).
 - Tablas de RevenTicket en el mismo proyecto (`config`, `events`, `orders`, `otp_codes`, `tickets`, `users`, `venues`, `zones`) conservan TODOS los privilegios de tabla para `anon`/`authenticated` (solo RLS los frena). No pertenecen a VANTA y no se tocaron. Análisis y recomendación: `docs/security/REVENTICKET_LEGACY_GRANTS.md`.
 - `script-src 'unsafe-inline'` necesario para Next sin nonces; mejora futura: CSP con nonce.
 - Rate limit en memoria: añadir reglas de Vercel Firewall en producción.
@@ -46,5 +46,7 @@
 | Funciones | 4 funciones con `search_path=''`; solo `vanta_handle_new_user` es `SECURITY DEFINER`; `anon` sin EXECUTE |
 | Defaults | `notifications_enabled` = `false` |
 | Datos | 0 filas en tablas VANTA, 0 usuarios, sin esquema `vanta_test_tmp` (antes del intento de pruebas) |
-| Suite de 41 aserciones | **Pendiente**: no ejecutada en remoto (dos intentos, 2026-10-29, sin confirmación del usuario a tiempo). Desde `51d5d9c` el script es una sola sentencia `DO` que siempre termina en excepción (atómica en cualquier modo de cliente); validado localmente en autocommit, `-1` y con fallo inyectado: 41/41, 0 residuos, datos previos intactos |
-| Línea base previa al intento | 0 usuarios, 0 filas VANTA, sin `vanta_test_tmp`, 3 triggers `vanta_*` |
+| Suite de 41 aserciones | **41/41 PASSED en remoto** (2026-10-29). Ejecutada por el usuario en el SQL Editor de `jxdyrzbeykhswpndoing` con `supabase/tests/remote_verify.sql` de `51d5d9c` (sha256 `aa56035a…ccbb`). Mensaje: `P0001: VANTA_REMOTE_SUITE_PASSED: 41/41 assertions passed; all test changes rolled back`, con las 41 aserciones enumeradas (captura de pantalla del usuario). Dos intentos previos vía MCP caducaron sin ejecutarse |
+| Línea base previa | 0 usuarios en `auth.users`, 0 filas VANTA, sin `vanta_test_tmp`, 3 triggers `vanta_*` |
+| Tras la suite (consulta de solo lectura) | 0 usuarios en `auth.users` (md5 de ids idéntico al de la línea base), 0 filas VANTA, sin `vanta_test_tmp`; 3 triggers, 10 políticas, RLS en todas las tablas, `model_approval_evidence` presente; `anon` sin SELECT en `raw_metadata`/`odds_snapshots`/`feature_snapshot`, sin INSERT en `predictions`, sin EXECUTE en `vanta_handle_new_user`; 0 políticas en `odds_snapshots` |
+| Datos preexistentes de RevenTicket | 3 `events`, 3 `venues`, 1 `users` creados el 2026-05-08 (antes de VANTA); la suite no referencia esas tablas |
