@@ -66,6 +66,8 @@ rejects() { # $1 = migration file, $2 = expected error tag, $3 = runner (OWN|SU)
   grep -q "$2" "$WORK/err" && [ "$(acl)" = "$ACL0" ] && [ "$(dacl)" = "$DACL0" ] && [ "$("${SU[@]}" -c "select to_regnamespace('reventicket_audit') is null")" = "t" ]
 }
 chk "guard: unfilled fingerprint aborts, nothing changed" 'rejects "$MIG" "expected_fingerprint not set" OWN'
+sed "0,/__SET_FROM_VERIFY_REMOTE__/s//${FP:0:8}…${FP: -4}/" "$MIG" > "$WORK/mig_abbrev.sql"; chmod a+r "$WORK/mig_abbrev.sql"
+chk "guard: an abbreviated fingerprint (as printed in reports) aborts, nothing changed" 'rejects "$WORK/mig_abbrev.sql" "must be the full 32-character value" OWN'
 chk "guard: wrong fingerprint (other database / data changed) aborts, nothing changed" 'rejects "$WORK/mig_wrongfp.sql" "fingerprint mismatch" OWN'
 chk "guard: a role that does not own the tables is refused, nothing changed" 'rejects "$FILLED" "run as the owner" SU'
 "${OWN[@]}" -c "create table public.session (sid varchar primary key, sess json not null, expire timestamp(6) not null)" >/dev/null

@@ -1,0 +1,208 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 29 Oct 2026 06:33:11 +0000
+Subject: [PATCH 3/3] fix(otp): store HMACs, CSPRNG codes, per-phone lockout,
+ atomic consume
+
+- otp_codes.code now holds HMAC-SHA256(OTP_PEPPER|SESSION_SECRET,
+  phone:code), compared with timingSafeEqual; plaintext never stored.
+- Codes come from crypto.randomInt instead of Math.random.
+- A new code expires the previous active codes for that phone.
+- 5 failed verifications for a phone expire its active codes (the
+  per-IP limiter did not stop distributed guessing).
+- Codes are consumed atomically (verified=false in the UPDATE).
+- Throwaway passwords for OTP-created users use crypto.randomBytes.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01F5Qf7rrHiv8YdVuSr2NJYq
+---
+ server/lib/otp.ts  | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ server/routes.ts   | 13 +++++++++++--
+ server/storage.ts  | 25 +++++++++++++++++--------
+ server/whatsapp.ts |  3 ++-
+ 4 files changed, 75 insertions(+), 11 deletions(-)
+ create mode 100644 server/lib/otp.ts
+
+diff --git a/server/lib/otp.ts b/server/lib/otp.ts
+new file mode 100644
+index 0000000..c9a93eb
+--- /dev/null
++++ b/server/lib/otp.ts
+@@ -0,0 +1,45 @@
++import { createHmac, randomInt, timingSafeEqual } from "crypto";
++
++// OTP codes are never stored in plaintext: only HMAC-SHA256(pepper, "phone:code").
++// The pepper is OTP_PEPPER (preferred) or SESSION_SECRET; production refuses to run without one.
++function pepper(): string {
++  const value = process.env.OTP_PEPPER || process.env.SESSION_SECRET;
++  if (value) return value;
++  if (process.env.NODE_ENV === "production") {
++    throw new Error("OTP_PEPPER or SESSION_SECRET is required to store OTP codes");
++  }
++  return "dev-only-otp-pepper";
++}
++
++export function generateOtpCode(): string {
++  return randomInt(100000, 1000000).toString();
++}
++
++export function hashOtp(phone: string, code: string): string {
++  return createHmac("sha256", pepper()).update(`${phone}:${code}`).digest("hex");
++}
++
++export function otpHashMatches(storedHash: string, phone: string, code: string): boolean {
++  const expected = Buffer.from(hashOtp(phone, code), "hex");
++  const actual = Buffer.from(storedHash, "hex");
++  return actual.length === expected.length && timingSafeEqual(actual, expected);
++}
++
++// Failed verifications per phone (the per-IP otpLimiter does not stop distributed guessing).
++// After MAX_FAILURES within the window every active code for that phone is expired in the database.
++// In-memory: with several instances each one counts separately, the DB expiry still applies to all.
++export const MAX_OTP_FAILURES = 5;
++const WINDOW_MS = 15 * 60 * 1000;
++const failures = new Map<string, { count: number; first: number }>();
++
++export function recordOtpFailure(phone: string): number {
++  const now = Date.now();
++  const entry = failures.get(phone);
++  const next = !entry || now - entry.first > WINDOW_MS ? { count: 1, first: now } : { count: entry.count + 1, first: entry.first };
++  failures.set(phone, next);
++  return next.count;
++}
++
++export function clearOtpFailures(phone: string): void {
++  failures.delete(phone);
++}
+diff --git a/server/routes.ts b/server/routes.ts
+index 0735321..da43c42 100644
+--- a/server/routes.ts
++++ b/server/routes.ts
+@@ -6,6 +6,8 @@ import { signToken, verifyToken, requireJWT, requireJWTAdmin } from "./lib/jwt-a
+ import session from "express-session";
+ import connectPgSimple from "connect-pg-simple";
+ import { insertUserSchema, insertEventSchema, insertZoneSchema, insertTicketSchema, insertOrderSchema } from "@shared/schema";
++import { randomBytes } from "crypto";
++import { recordOtpFailure, clearOtpFailures, MAX_OTP_FAILURES } from "./lib/otp";
+ import { whatsappService } from "./whatsapp";
+ import { format } from "date-fns";
+ import { es } from "date-fns/locale";
+@@ -810,17 +812,24 @@ export async function registerRoutes(
+       const otpRecord = await storage.getValidOtpCode(phone, code);
+ 
+       if (!otpRecord) {
++        if (recordOtpFailure(phone) >= MAX_OTP_FAILURES) {
++          await storage.expireActiveOtpCodes(phone);
++        }
+         return res.status(400).json({ error: "Código inválido o expirado" });
+       }
+ 
+-      await storage.markOtpVerified(otpRecord.id);
++      // Consume atomically: a concurrent request with the same code gets the same error.
++      if (!(await storage.markOtpVerified(otpRecord.id))) {
++        return res.status(400).json({ error: "Código inválido o expirado" });
++      }
++      clearOtpFailures(phone);
+ 
+       // Buscar o crear usuario por teléfono (email sintético)
+       const phoneEmail = `${phone}@reventicket.mx`;
+       let user = await storage.getUserByEmail(phoneEmail);
+       if (!user) {
+         // Usuario nuevo — crear con datos mínimos
+-        const randomPw = Math.random().toString(36) + Date.now().toString(36);
++        const randomPw = randomBytes(32).toString("hex");
+         const hashedPw = await bcrypt.hash(randomPw, 10);
+         user = await storage.createUser({
+           email: phoneEmail,
+diff --git a/server/storage.ts b/server/storage.ts
+index ce8bfdd..fd769ca 100644
+--- a/server/storage.ts
++++ b/server/storage.ts
+@@ -35,6 +35,7 @@ import {
+ import { db, pool } from "./db";
+ import { eq, and, desc, gte, lt, isNull, sql } from "drizzle-orm";
+ import { getFeeRate, calculateServerFees } from "./lib/fees";
++import { hashOtp, otpHashMatches } from "./lib/otp";
+ 
+ export interface AtomicPurchaseResult {
+   success: boolean;
+@@ -96,6 +97,7 @@ export interface IStorage {
+   createOtpCode(otp: InsertOtpCode): Promise<OtpCode>;
+   getValidOtpCode(phone: string, code: string): Promise<OtpCode | undefined>;
+   markOtpVerified(id: string): Promise<OtpCode | undefined>;
++  expireActiveOtpCodes(phone: string): Promise<void>;
+   
+   // Carts
+   createCart(cart: InsertCart): Promise<Cart>;
+@@ -274,32 +276,39 @@ export class DatabaseStorage implements IStorage {
+     }
+   }
+ 
+-  // OTP
++  // OTP (only HMACs are stored; see server/lib/otp.ts)
+   async createOtpCode(otp: InsertOtpCode): Promise<OtpCode> {
+-    const result = await db.insert(otpCodes).values(otp).returning();
++    // A new code invalidates any code still active for the same phone.
++    await this.expireActiveOtpCodes(otp.phone);
++    const result = await db.insert(otpCodes).values({ ...otp, code: hashOtp(otp.phone, otp.code) }).returning();
+     return result[0];
+   }
+ 
+   async getValidOtpCode(phone: string, code: string): Promise<OtpCode | undefined> {
+-    const result = await db.select().from(otpCodes)
++    const candidates = await db.select().from(otpCodes)
+       .where(and(
+         eq(otpCodes.phone, phone),
+-        eq(otpCodes.code, code),
+         eq(otpCodes.verified, false),
+         gte(otpCodes.expiresAt, new Date())
+-      ))
+-      .limit(1);
+-    return result[0];
++      ));
++    return candidates.find((row) => otpHashMatches(row.code, phone, code));
+   }
+ 
++  // Atomic: only one request can consume a given code.
+   async markOtpVerified(id: string): Promise<OtpCode | undefined> {
+     const result = await db.update(otpCodes)
+       .set({ verified: true })
+-      .where(eq(otpCodes.id, id))
++      .where(and(eq(otpCodes.id, id), eq(otpCodes.verified, false)))
+       .returning();
+     return result[0];
+   }
+ 
++  async expireActiveOtpCodes(phone: string): Promise<void> {
++    await db.update(otpCodes)
++      .set({ expiresAt: new Date() })
++      .where(and(eq(otpCodes.phone, phone), eq(otpCodes.verified, false), gte(otpCodes.expiresAt, new Date())));
++  }
++
+   // Carts
+   async createCart(cart: InsertCart): Promise<Cart> {
+     const result = await db.insert(carts).values(cart).returning();
+diff --git a/server/whatsapp.ts b/server/whatsapp.ts
+index f57a914..c7b1b4c 100644
+--- a/server/whatsapp.ts
++++ b/server/whatsapp.ts
+@@ -3,6 +3,7 @@ const { Client, LocalAuth } = pkg;
+ import qrcode from "qrcode-terminal";
+ import * as fs from "fs";
+ import * as path from "path";
++import { generateOtpCode } from "./lib/otp";
+ 
+ const SESSION_PATH = "/tmp/wwebjs_session";
+ const WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED === "true";
+@@ -162,7 +163,7 @@ class WhatsAppService {
+   }
+ 
+   generateOTP(): string {
+-    return Math.floor(100000 + Math.random() * 900000).toString();
++    return generateOtpCode();
+   }
+ 
+   async sendOTP(phone: string, code: string): Promise<boolean> {
+-- 
+2.43.0
+

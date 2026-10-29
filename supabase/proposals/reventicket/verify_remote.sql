@@ -36,10 +36,11 @@ select json_build_object(
       and a.grantee in ('anon'::regrole, 'authenticated'::regrole)),
   'audit_rows', case when to_regclass('reventicket_audit.revoked_privileges') is null then null else
       (xpath('/row/c/text()', query_to_xml('select count(*) as c from reventicket_audit.revoked_privileges where restored_at is null', false, true, '')))[1]::text end,
-  'vanta', json_build_object(
+  -- VANTA EDGE section is null when the database has no VANTA objects (e.g. RevenTicket's own database).
+  'vanta', case when to_regclass('public.odds_snapshots') is null or to_regclass('public.games') is null then null else json_build_object(
       'triggers', (select string_agg(tgname, ',' order by tgname) from pg_trigger where tgname like 'vanta%' and not tgisinternal),
       'policies', (select count(*) from pg_policies where schemaname = 'public'
                      and tablename not in ('config','events','orders','otp_codes','tickets','users','venues','zones')),
       'anon_odds', has_table_privilege('anon', 'public.odds_snapshots', 'select'),
-      'anon_raw_metadata', has_column_privilege('anon', 'public.games', 'raw_metadata', 'select'))
+      'anon_raw_metadata', has_column_privilege('anon', 'public.games', 'raw_metadata', 'select')) end
 ) as reventicket_least_privilege_state;

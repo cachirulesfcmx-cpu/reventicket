@@ -1,3 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 29 Oct 2026 06:33:11 +0000
+Subject: [PATCH 1/3] fix(auth): public registration can no longer choose its
+ role
+
+/api/auth/register passed the whole insertUserSchema payload (including
+role) to createUser, so anyone could self-register as admin. The role is
+now discarded and forced to buyer.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01F5Qf7rrHiv8YdVuSr2NJYq
+---
+ server/routes.ts | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
 diff --git a/server/routes.ts b/server/routes.ts
 index 8aad18d..a6c3aa2 100644
 --- a/server/routes.ts
@@ -20,3 +36,6 @@ index 8aad18d..a6c3aa2 100644
        });
  
        // Set session
+-- 
+2.43.0
+

@@ -23,12 +23,37 @@ esquema) → `docs/security/REVENTICKET_APP_FINDINGS.md`, con parches separados.
 **Conclusión:** no se puede determinar con la evidencia disponible. El valor de `DATABASE_URL` vive en Railway (y
 quizá en Vercel, cuyas variables devuelven 403 a esta sesión). No se deduce por nombres ni por tablas.
 
-**Cómo confirmarlo sin exponer secretos** (cualquiera de las dos):
+**Cómo confirmarlo sin exponer secretos (instrucciones para el operador):**
 
-1. Railway → servicio `reventicket` → *Variables* → `DATABASE_URL`: indicar **solo** si el host/usuario contiene
-   `jxdyrzbeykhswpndoing` (o el host de otra base). No copiar la contraseña.
-2. Con esa `DATABASE_URL`, ejecutar en un cliente SQL la consulta de solo lectura `verify_remote.sql` y comparar:
-   `fingerprint` = `6b64e07366739007bcde994686687995` y `legacy_row_counts` = 1/3/3/0/0/0/0/0 ⇒ es esta base.
+Desde un checkout de esta rama, con la CLI de Railway enlazada al proyecto y al servicio del backend:
+
+```bash
+railway login && railway link        # elegir el proyecto RevenTicket y su servicio backend
+railway run -- bash supabase/proposals/reventicket/operator/identify_production_db.sh
+```
+
+`railway run` inyecta las variables del servicio solo en ese proceso. El script
+(`supabase/proposals/reventicket/operator/identify_production_db.sh`):
+
+- **Nunca imprime** `DATABASE_URL` ni la contraseña: muestra `host`, `port`, `database`, `user`, `password set: yes/no`
+  y la referencia de Supabase deducida del host o del usuario del pooler (`postgres.<ref>`).
+- Ejecuta `operator/identify.sql` (funciona en **cualquier** PostgreSQL: versión, si es Supabase, nombres de tablas
+  presentes, sin filas) dentro de `BEGIN TRANSACTION READ ONLY … ROLLBACK` (cualquier escritura fallaría; no usa
+  `PGOPTIONS` porque el pooler de Supabase puede rechazar opciones de arranque).
+- Solo si es Supabase y tiene las 8 tablas antiguas, ejecuta `verify_remote.sql` (también en solo lectura): privilegios,
+  recuentos y `fingerprint`.
+- Si `DATABASE_URL` no existe (servicio borrado), lo dice: entonces **no hay backend de producción** que identificar.
+
+Probado en local: base PostgreSQL sin Supabase ni tablas (identifica y omite el informe), base tipo remoto
+(informe completo), contraseña nunca impresa, `DELETE` bajo el mismo modo ⇒ *cannot execute DELETE in a read-only
+transaction*.
+
+Qué compartir: la salida del script (no contiene secretos). Qué **no** compartir: la URL, la contraseña ni capturas
+de la página de variables.
+
+Interpretación: es esta base si `supabase ref` = `jxdyrzbeykhswpndoing` **y** `fingerprint` es **exactamente**
+`6b64e07366739007bcde994686687995` (los 32 caracteres; en los informes se abrevia como `6b64e073…7995`, abreviatura que
+la migración rechaza explícitamente) **y** `legacy_row_counts` = 1/3/3/0/0/0/0/0.
 
 Si producción usa **otra** base: este plan no se aplica tal cual; hay que repetir la auditoría allí (la migración
 lo exige: huella, tablas inesperadas, políticas).
@@ -40,7 +65,7 @@ Archivo: `supabase/proposals/reventicket/20261029_reventicket_least_privilege.sq
 
 | Requisito | Resultado de la revisión | Cambio hecho en esta fase |
 |---|---|---|
-| Verificar destino | Antes solo comprobaba tablas/dueño/RLS | **Huella obligatoria** (`expected_fingerprint`, md5 de los ids de las 8 tablas, calculada con `verify_remote.sql`); sin rellenar o distinta ⇒ aborta. Comprueba roles `anon`/`authenticated` (Supabase) |
+| Verificar destino | Antes solo comprobaba tablas/dueño/RLS | **Huella obligatoria** (`expected_fingerprint`, md5 de los ids de las 8 tablas, calculada con `verify_remote.sql`); sin rellenar, abreviada (no son 32 hex) o distinta ⇒ aborta; se compara la cadena **completa**. Comprueba roles `anon`/`authenticated` (Supabase) |
 | Dueño de las tablas y RLS | Sí (`current_user` = dueño de las 8; RLS activo) | — |
 | Abortar ante políticas nuevas / estado inesperado | Políticas: sí | **Aborta si hay relaciones en `public` fuera del alcance auditado** (p. ej. `session`, `push_subscriptions` ⇒ el backend ya corrió ahí) |
 | Retirar solo privilegios de cliente | `REVOKE ALL … FROM anon, authenticated` en las 8 tablas | — |
@@ -85,7 +110,7 @@ clientes), 8 tablas con la estructura remota real y filas ficticias, migraciones
 | Comprobación | 17.11 | 16.15 |
 |---|---|---|
 | Línea base: anon con SELECT en `users`; con RLS desactivado lee la fila (riesgo real) | PASS | PASS |
-| Guardas (abortan sin cambios): huella sin rellenar, huella errónea, rol no dueño, tabla inesperada (`session`), política añadida | 5/5 PASS | 5/5 PASS |
+| Guardas (abortan sin cambios): huella sin rellenar, huella **abreviada**, huella errónea, rol no dueño, tabla inesperada (`session`), política añadida | 6/6 PASS | 6/6 PASS |
 | Atomicidad: fallo inyectado tras los `REVOKE` ⇒ ACL, privilegios por defecto y esquema de auditoría intactos (cliente en autocommit) | PASS | PASS |
 | Aplicación con la huella confirmada; instantánea | 128 + 22 | 112 + 20 |
 | Regresión **48/48**: matriz anon/authenticated × 8 tablas; anon sin hashes/OTP/órdenes/boletos/config, sin crear OTP/usuarios, sin TRUNCATE; authenticated sin escalar rol, sin órdenes ajenas, sin borrar boletos, sin reutilizar OTP, sin tocar config; bloqueo aunque RLS se desactive; RLS y 0 políticas; `service_role` intacto; auditoría inaccesible; flujos del backend (registro/login, OTP, alta admin, compra pagada y boleto emitido, wallet, borrado en cascada); `session`, `push_subscriptions`, `event_maps`, `discount_codes`, tablas de `db:push` privadas; backend con acceso completo a ellas | PASS | PASS |
@@ -126,8 +151,10 @@ crea con el bundle (ENOENT `dist/table.sql`). Ver hallazgos de la app.
 `unexpected_relations_in_public` ≠ null, políticas en tablas antiguas, RLS desactivado, `current_user` ≠ dueño,
 `audit_rows` activos o recuentos distintos de los esperados; CI rojo en el commit a aplicar.
 
-1. **Pre-check (solo lectura)** en la base confirmada: ejecutar `verify_remote.sql`; guardar el JSON.
-2. Copiar la migración, sustituir `__SET_FROM_VERIFY_REMOTE__` por el `fingerprint` del paso 1 (única edición).
+1. **Pre-check (solo lectura)** en la base confirmada: `operator/identify_production_db.sh` (vía `railway run`) o
+   `verify_remote.sql` con `postgres`; guardar el JSON.
+2. Copiar la migración y sustituir `__SET_FROM_VERIFY_REMOTE__` por el `fingerprint` **completo** (32 caracteres) del
+   paso 1 (única edición). Una abreviatura o un valor distinto aborta sin cambios.
 3. **Aplicar** como `postgres`: MCP `apply_migration` (aceptar la confirmación interactiva) o SQL Editor, **una sola
    ejecución**. Éxito = `NOTICE RT_APPLIED: 128 table and 22 default privileges revoked and recorded` (PG17).
    Cualquier `RT_PRECONDITION`/`RT_POSTCONDITION` = nada cambió; parar y reauditar.
@@ -148,12 +175,45 @@ problema atribuible a la migración: ejecutar `20261029_reventicket_least_privil
 (restaura solo lo registrado; idempotente), repetir `verify_remote.sql` y comparar con el paso 1. Los datos no
 se tocan en ningún caso.
 
-## 7. Acción exacta que debe confirmar el usuario
+## 7. Alternativa recomendada: esquema propio para RevenTicket (aislamiento de VANTA)
 
-1. **Destino:** "La `DATABASE_URL` del backend de RevenTicket en producción apunta a `jxdyrzbeykhswpndoing`
-   (o a otra base: indicar cuál), con el usuario `postgres`" — o el resultado de `verify_remote.sql` ejecutado con
-   esa conexión.
-2. **Autorización:** "Autorizo aplicar `20261029_reventicket_least_privilege.sql` en `jxdyrzbeykhswpndoing` con el
-   procedimiento de §6".
+Investigado y probado en local; **no se cambió** `search_path`, esquemas ni variables de producción.
+Detalle y resultados: `REVENTICKET_APP_FINDINGS.md` (F4) y `supabase/proposals/reventicket/isolation/`.
 
-Sin ambas, no se ejecuta ningún cambio remoto.
+| Opción | Aislamiento | Coste | Estado |
+|---|---|---|---|
+| A. Mínimo privilegio en `public` (este documento) | Clientes sin privilegios; sigue compartiendo `public` con VANTA; `db:push` sigue siendo peligroso | Bajo | Preparada y probada |
+| B. Esquema `reventicket` + rol `reventicket_app` (`search_path`) + `pgSchema`/`schemaFilter` (parche 0005) | No expuesto por PostgREST; `anon`/`authenticated` sin `USAGE`; `db:push` solo ve su esquema | Medio (mover 8 tablas, cambiar `DATABASE_URL`, desplegar 0005) | Preparada y probada: filas intactas, VANTA idéntico, backend real 27/27, push sin preguntas |
+| C. Proyecto Supabase propio | Total (roles, claves, cuotas) | Alto (migrar datos y variables) | No preparada |
+
+B sustituye a A para las 8 tablas (dejan de estar en `public`). Orden si se elige B: crear el rol con contraseña
+gestionada fuera de SQL → `identify_production_db.sh` → mover con la huella completa → cambiar `DATABASE_URL` en
+Railway al rol nuevo → desplegar la app con 0001–0005 → `drizzle-kit push` **solo** con `schemaFilter` (o migraciones
+generadas y revisadas) → verificaciones. Reversión de B: `alter table reventicket.X set schema public` + dueño
+`postgres` (preparar y probar antes de aplicar si se elige).
+
+## 8. Plan de despliegue de las correcciones de la aplicación (sin ejecutar)
+
+1. Revisión: la rama local `reventicket-security-fixes` (4 commits sobre `main`) o la serie de parches de
+   `docs/security/reventicket-patches/`. Publicar la rama y abrir PR requiere autorización.
+2. Antes de desplegar: comprobar que cada admin entra con su contraseña bcrypt (si no, fijar un hash nuevo con
+   autorización); definir `OTP_PEPPER` (aleatorio, ≥32 bytes) en Railway; unificar el build en `build:server`.
+3. Desplegar en Railway (requiere autorización; hoy el servicio no existe: 404).
+4. Verificación en producción con cuentas de prueba (sin leer credenciales ni OTP): registro con `role=admin` ⇒ la
+   respuesta muestra `buyer` y las rutas admin dan 403; login con el valor antiguo de `ADMIN_PASSWORD` ⇒ 401; login
+   admin bcrypt ⇒ 200; OTP: correcto 200, reutilizado 400, tras 5 fallos 400; compra y confirmación ⇒ `paid/sold`.
+5. Después: borrar `ADMIN_PASSWORD` de Railway/Vercel y rotarla; rotar las contraseñas del seed si alguna cuenta real
+   las usa; borrar las cuentas de prueba; recuento por rol para detectar admins creados por registro público.
+6. Rollback de la app: redeploy del commit anterior en Railway (los parches no cambian el esquema; los OTP emitidos
+   con HMAC dejarían de validar con la versión antigua, lo que solo afecta a códigos de 10 minutos).
+
+## 9. Acción exacta que debe confirmar el usuario
+
+1. **Destino:** la salida de `operator/identify_production_db.sh` ejecutado con `railway run` (o, si el servicio ya no
+   existe, confirmarlo) — nunca la URL ni la contraseña.
+2. **Elección de plan de base de datos:** A (mínimo privilegio en `public`) o B (esquema propio, recomendado).
+3. **Autorización de escritura remota:** "Autorizo aplicar `<archivo>` en `<ref>` con el procedimiento de §6 (A) / §7 (B)".
+4. **Autorización de código:** publicar la rama `reventicket-security-fixes` y abrir un PR contra `main` (o aplicar la
+   serie de parches por otra vía). Fusionar y desplegar en Railway son autorizaciones aparte.
+
+Sin las autorizaciones correspondientes no se ejecuta ningún cambio remoto, de código en `main` ni de despliegue.

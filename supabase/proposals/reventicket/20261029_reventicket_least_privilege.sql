@@ -76,6 +76,10 @@ begin
   if expected_fingerprint = '__SET_FROM_VERIFY_REMOTE__' then
     raise exception 'RT_PRECONDITION: expected_fingerprint not set; run verify_remote.sql on the confirmed target first';
   end if;
+  -- The full 32-hex md5 is compared; an abbreviated value from a report (e.g. "6b64e073…7995") is rejected.
+  if expected_fingerprint !~ '^[0-9a-f]{32}$' then
+    raise exception 'RT_PRECONDITION: expected_fingerprint must be the full 32-character value from verify_remote.sql';
+  end if;
   if actual_fingerprint <> expected_fingerprint then
     raise exception 'RT_PRECONDITION: fingerprint mismatch (expected %, found %); wrong database or data changed since the check',
       expected_fingerprint, actual_fingerprint;

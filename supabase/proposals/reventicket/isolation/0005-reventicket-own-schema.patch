@@ -1,0 +1,222 @@
+diff --git a/drizzle.config.ts b/drizzle.config.ts
+index 4cd7b4c..eb9d98f 100644
+--- a/drizzle.config.ts
++++ b/drizzle.config.ts
+@@ -8,6 +8,8 @@ export default defineConfig({
+   out: "./migrations",
+   schema: "./shared/schema.ts",
+   dialect: "postgresql",
++  // Never diff or touch other schemas (VANTA EDGE lives in `public`).
++  schemaFilter: ["reventicket"],
+   dbCredentials: {
+     url: process.env.DATABASE_URL,
+   },
+diff --git a/shared/schema.ts b/shared/schema.ts
+index f17701e..2fadca0 100644
+--- a/shared/schema.ts
++++ b/shared/schema.ts
+@@ -1,10 +1,13 @@
+ import { sql } from "drizzle-orm";
+-import { pgTable, text, varchar, integer, timestamp, decimal, boolean, json } from "drizzle-orm/pg-core";
++import { pgSchema, text, varchar, integer, timestamp, decimal, boolean, json } from "drizzle-orm/pg-core";
++
++// All RevenTicket tables live in their own schema, isolated from other apps in `public`.
++export const reventicketSchema = pgSchema("reventicket");
+ import { createInsertSchema } from "drizzle-zod";
+ import { z } from "zod";
+ 
+ // Users table
+-export const users = pgTable("users", {
++export const users = reventicketSchema.table("users", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   email: text("email").notNull().unique(),
+   password: text("password").notNull(),
+@@ -23,7 +26,7 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
+ export type User = typeof users.$inferSelect;
+ 
+ // Venues table
+-export const venues = pgTable("venues", {
++export const venues = reventicketSchema.table("venues", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   name: text("name").notNull(),
+   city: text("city").notNull(),
+@@ -41,7 +44,7 @@ export type InsertVenue = z.infer<typeof insertVenueSchema>;
+ export type Venue = typeof venues.$inferSelect;
+ 
+ // Events table
+-export const events = pgTable("events", {
++export const events = reventicketSchema.table("events", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   title: text("title").notNull(),
+   category: text("category").notNull(), // Concert | Sports | Theater | Family | F1
+@@ -66,7 +69,7 @@ export type InsertEvent = z.infer<typeof insertEventSchema>;
+ export type Event = typeof events.$inferSelect;
+ 
+ // Zones table (linked to venues for pricing structure)
+-export const zones = pgTable("zones", {
++export const zones = reventicketSchema.table("zones", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   eventId: varchar("event_id").notNull().references(() => events.id, { onDelete: 'cascade' }),
+   name: text("name").notNull(),
+@@ -82,7 +85,7 @@ export type InsertZone = z.infer<typeof insertZoneSchema>;
+ export type Zone = typeof zones.$inferSelect;
+ 
+ // Tickets table
+-export const tickets = pgTable("tickets", {
++export const tickets = reventicketSchema.table("tickets", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   eventId: varchar("event_id").notNull().references(() => events.id, { onDelete: 'cascade' }),
+   zoneId: varchar("zone_id").notNull().references(() => zones.id, { onDelete: 'cascade' }),
+@@ -104,7 +107,7 @@ export type InsertTicket = z.infer<typeof insertTicketSchema>;
+ export type Ticket = typeof tickets.$inferSelect;
+ 
+ // Orders table
+-export const orders = pgTable("orders", {
++export const orders = reventicketSchema.table("orders", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   userId: varchar("user_id").notNull().references(() => users.id),
+   ticketId: varchar("ticket_id").notNull().references(() => tickets.id),
+@@ -129,7 +132,7 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
+ export type Order = typeof orders.$inferSelect;
+ 
+ // Config table for platform settings
+-export const config = pgTable("config", {
++export const config = reventicketSchema.table("config", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   key: text("key").notNull().unique(),
+   value: json("value").notNull(),
+@@ -145,7 +148,7 @@ export type InsertConfig = z.infer<typeof insertConfigSchema>;
+ export type Config = typeof config.$inferSelect;
+ 
+ // OTP codes for WhatsApp verification
+-export const otpCodes = pgTable("otp_codes", {
++export const otpCodes = reventicketSchema.table("otp_codes", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   phone: text("phone").notNull(),
+   code: text("code").notNull(),
+@@ -164,7 +167,7 @@ export type InsertOtpCode = z.infer<typeof insertOtpCodeSchema>;
+ export type OtpCode = typeof otpCodes.$inferSelect;
+ 
+ // Carts for abandoned cart tracking
+-export const carts = pgTable("carts", {
++export const carts = reventicketSchema.table("carts", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   sessionId: text("session_id").notNull(),
+   phone: text("phone"),
+@@ -187,7 +190,7 @@ export type InsertCart = z.infer<typeof insertCartSchema>;
+ export type Cart = typeof carts.$inferSelect;
+ 
+ // Payment reminders tracking
+-export const paymentReminders = pgTable("payment_reminders", {
++export const paymentReminders = reventicketSchema.table("payment_reminders", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   orderId: varchar("order_id").notNull().references(() => orders.id),
+   hoursAfter: integer("hours_after").notNull(), // 1, 6, or 12
+@@ -205,7 +208,7 @@ export type InsertPaymentReminder = z.infer<typeof insertPaymentReminderSchema>;
+ export type PaymentReminder = typeof paymentReminders.$inferSelect;
+ 
+ // Order events for auditing (event sourcing light)
+-export const orderEvents = pgTable("order_events", {
++export const orderEvents = reventicketSchema.table("order_events", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }),
+   actorType: text("actor_type").notNull(), // user | admin | system
+@@ -227,7 +230,7 @@ export type OrderEvent = typeof orderEvents.$inferSelect;
+ 
+ // Idempotency keys to prevent duplicate orders
+ // Note: user_id is required for /api/orders (authenticated endpoint)
+-export const idempotencyKeys = pgTable("idempotency_keys", {
++export const idempotencyKeys = reventicketSchema.table("idempotency_keys", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   userId: varchar("user_id").notNull(), // Required - orders require auth
+   scope: text("scope").notNull(), // e.g., "POST:/api/orders"
+@@ -251,7 +254,7 @@ export type InsertIdempotencyKey = z.infer<typeof insertIdempotencyKeySchema>;
+ export type IdempotencyKey = typeof idempotencyKeys.$inferSelect;
+ 
+ // Job locks for distributed job coordination
+-export const jobLocks = pgTable("job_locks", {
++export const jobLocks = reventicketSchema.table("job_locks", {
+   jobName: text("job_name").primaryKey(),
+   lockedBy: text("locked_by").notNull(),
+   lockedAt: timestamp("locked_at").notNull().defaultNow(),
+@@ -263,7 +266,7 @@ export const jobLocks = pgTable("job_locks", {
+ // ============================================
+ 
+ // Risk events (append-only telemetry)
+-export const riskEvents = pgTable("risk_events", {
++export const riskEvents = reventicketSchema.table("risk_events", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   userId: varchar("user_id").references(() => users.id),
+   sessionHash: text("session_hash"),
+@@ -286,7 +289,7 @@ export type InsertRiskEvent = z.infer<typeof insertRiskEventSchema>;
+ export type RiskEvent = typeof riskEvents.$inferSelect;
+ 
+ // Risk profiles (aggregated by user/session)
+-export const riskProfiles = pgTable("risk_profiles", {
++export const riskProfiles = reventicketSchema.table("risk_profiles", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   userId: varchar("user_id").references(() => users.id),
+   sessionHash: text("session_hash"),
+@@ -312,7 +315,7 @@ export type InsertRiskProfile = z.infer<typeof insertRiskProfileSchema>;
+ export type RiskProfile = typeof riskProfiles.$inferSelect;
+ 
+ // Bans (temporary/permanent)
+-export const bans = pgTable("bans", {
++export const bans = reventicketSchema.table("bans", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   userId: varchar("user_id").references(() => users.id),
+   phone: text("phone"),
+@@ -334,7 +337,7 @@ export type InsertBan = z.infer<typeof insertBanSchema>;
+ export type Ban = typeof bans.$inferSelect;
+ 
+ // Analytics events (append-only tracking)
+-export const analyticsEvents = pgTable("analytics_events", {
++export const analyticsEvents = reventicketSchema.table("analytics_events", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   eventName: text("event_name").notNull(), // view_home, view_event, checkout_start, etc.
+   userId: varchar("user_id").references(() => users.id),
+@@ -356,7 +359,7 @@ export type InsertAnalyticsEvent = z.infer<typeof insertAnalyticsEventSchema>;
+ export type AnalyticsEvent = typeof analyticsEvents.$inferSelect;
+ 
+ // Ticket passes (wallet QR)
+-export const ticketPasses = pgTable("ticket_passes", {
++export const ticketPasses = reventicketSchema.table("ticket_passes", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   orderId: varchar("order_id").notNull().references(() => orders.id),
+   ticketId: varchar("ticket_id").notNull().references(() => tickets.id),
+@@ -377,7 +380,7 @@ export type InsertTicketPass = z.infer<typeof insertTicketPassSchema>;
+ export type TicketPass = typeof ticketPasses.$inferSelect;
+ 
+ // Ticket pass uses (scan history)
+-export const ticketPassUses = pgTable("ticket_pass_uses", {
++export const ticketPassUses = reventicketSchema.table("ticket_pass_uses", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   passId: varchar("pass_id").notNull().references(() => ticketPasses.id),
+   scannedBy: varchar("scanned_by").notNull().references(() => users.id), // admin/staff
+@@ -395,7 +398,7 @@ export type InsertTicketPassUse = z.infer<typeof insertTicketPassUseSchema>;
+ export type TicketPassUse = typeof ticketPassUses.$inferSelect;
+ 
+ // Resale listings (marketplace futuro - desactivado por default)
+-export const resaleListings = pgTable("resale_listings", {
++export const resaleListings = reventicketSchema.table("resale_listings", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   ticketId: varchar("ticket_id").notNull().references(() => tickets.id),
+   ownerUserId: varchar("owner_user_id").notNull().references(() => users.id),
+@@ -417,7 +420,7 @@ export type InsertResaleListing = z.infer<typeof insertResaleListingSchema>;
+ export type ResaleListing = typeof resaleListings.$inferSelect;
+ 
+ // ─── DISCOUNT CODES ───────────────────────────────────────────────────────────
+-export const discountCodes = pgTable("discount_codes", {
++export const discountCodes = reventicketSchema.table("discount_codes", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   code: text("code").notNull().unique(),
+   description: text("description"),
+@@ -436,7 +439,7 @@ export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
+ export type DiscountCode = typeof discountCodes.$inferSelect;
+ 
+ // ─── EVENT MAPS ───────────────────────────────────────────────────────────────
+-export const eventMaps = pgTable("event_maps", {
++export const eventMaps = reventicketSchema.table("event_maps", {
+   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+   eventId: varchar("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+   name: text("name").notNull(),
