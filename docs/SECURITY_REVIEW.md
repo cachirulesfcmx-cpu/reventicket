@@ -26,7 +26,7 @@
 ## Pendiente / riesgos aceptados
 
 - **Migración de seguridad aplicada en remoto (2026-10-29)**, verificada estructuralmente (objetos, políticas, privilegios y funciones; ver tabla abajo). **Las 41 aserciones de `supabase/tests/remote_verify.sql` aún no se han ejecutado en remoto**: el intento quedó sin confirmación del usuario. Hasta entonces, la evidencia de comportamiento es la local/CI (41/41).
-- Tablas de RevenTicket en el mismo proyecto (`config`, `events`, `orders`, `otp_codes`, `tickets`, `users`, `venues`, `zones`) conservan TODOS los privilegios de tabla para `anon`/`authenticated` (solo RLS los frena). No pertenecen a VANTA y no se tocaron; conviene revisarlas aparte.
+- Tablas de RevenTicket en el mismo proyecto (`config`, `events`, `orders`, `otp_codes`, `tickets`, `users`, `venues`, `zones`) conservan TODOS los privilegios de tabla para `anon`/`authenticated` (solo RLS los frena). No pertenecen a VANTA y no se tocaron. Análisis y recomendación: `docs/security/REVENTICKET_LEGACY_GRANTS.md`.
 - `script-src 'unsafe-inline'` necesario para Next sin nonces; mejora futura: CSP con nonce.
 - Rate limit en memoria: añadir reglas de Vercel Firewall en producción.
 - GHSA-mrhx-c7xc-m3w5 (zod 3 dentro de `@expo/cli`, herramienta de desarrollo): aceptado hasta 2027-01-31 en `docs/security/audit-allowlist.json`.
@@ -46,4 +46,5 @@
 | Funciones | 4 funciones con `search_path=''`; solo `vanta_handle_new_user` es `SECURITY DEFINER`; `anon` sin EXECUTE |
 | Defaults | `notifications_enabled` = `false` |
 | Datos | 0 filas en tablas VANTA, 0 usuarios, sin esquema `vanta_test_tmp` (antes del intento de pruebas) |
-| Suite de 41 aserciones | **Pendiente**: no ejecutada en remoto. Validada localmente con el mismo archivo: 41/41, 0 residuos |
+| Suite de 41 aserciones | **Pendiente**: no ejecutada en remoto (dos intentos, 2026-10-29, sin confirmación del usuario a tiempo). Desde `51d5d9c` el script es una sola sentencia `DO` que siempre termina en excepción (atómica en cualquier modo de cliente); validado localmente en autocommit, `-1` y con fallo inyectado: 41/41, 0 residuos, datos previos intactos |
+| Línea base previa al intento | 0 usuarios, 0 filas VANTA, sin `vanta_test_tmp`, 3 triggers `vanta_*` |
