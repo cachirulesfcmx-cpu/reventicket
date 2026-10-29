@@ -249,7 +249,8 @@ export async function registerRoutes(
   // ===== Auth Routes =====
   app.post("/api/auth/register", authLimiter, async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
+      // Never trust a client-supplied role: public registration always creates buyers.
+      const { role: _ignoredRole, ...userData } = insertUserSchema.parse(req.body);
       
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(userData.email);
@@ -262,6 +263,7 @@ export async function registerRoutes(
       const user = await storage.createUser({
         ...userData,
         password: hashedPassword,
+        role: "buyer",
       });
 
       // Set session
