@@ -15,9 +15,20 @@ select json_build_object(
       'venues', (select count(*) from public.venues), 'zones', (select count(*) from public.zones),
       'tickets', (select count(*) from public.tickets), 'orders', (select count(*) from public.orders),
       'otp_codes', (select count(*) from public.otp_codes), 'config', (select count(*) from public.config))),
-  'legacy_ids_md5', (select md5(string_agg(x, ',' order by x)) from (
-      select 'u' || id as x from public.users union all select 'e' || id from public.events
-      union all select 'v' || id from public.venues) s),
+  -- Same expression the migration checks: paste this value into expected_fingerprint.
+  'fingerprint', (select md5(coalesce(string_agg(x, ',' order by x), ''))
+    from (select 'config:' || id as x from public.config union all select 'events:' || id from public.events
+          union all select 'orders:' || id from public.orders union all select 'otp_codes:' || id from public.otp_codes
+          union all select 'tickets:' || id from public.tickets union all select 'users:' || id from public.users
+          union all select 'venues:' || id from public.venues union all select 'zones:' || id from public.zones) s),
+  -- Must be null for the migration to run (e.g. `session` here means the backend already ran on this database).
+  'unexpected_relations_in_public', (select string_agg(c.relname, ', ' order by c.relname) from pg_class c
+    where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f')
+      and c.relname not in ('config','events','orders','otp_codes','tickets','users','venues','zones',
+                            'teams','games','game_facts','odds_snapshots','model_versions','predictions','followed_teams',
+                            'user_preferences','profiles','data_sources','ingestion_runs','data_freshness','published_performance')),
+  'current_user', current_user,
+  'server_version', current_setting('server_version'),
   'default_privileges_for_current_user', (
     select json_agg(json_build_object('type', d.defaclobjtype, 'grantee', pg_get_userbyid(a.grantee), 'priv', a.privilege_type))
     from pg_default_acl d, aclexplode(d.defaclacl) a

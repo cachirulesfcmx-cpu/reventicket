@@ -123,6 +123,28 @@ select rt_test.ok(not has_table_privilege('anon', 'public.discount_codes', 'sele
   'new runtime tables and sequences are private by default');
 select rt_test.ok(has_table_privilege('service_role', 'public.session', 'select'),
   'service_role still receives default grants on new tables');
+-- push-notifications.ts ensurePushTable(): holds push endpoint secrets (p256dh, auth)
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(), user_id varchar references public.users(id) on delete cascade,
+  endpoint text not null unique, p256dh text not null, auth text not null, role text not null default 'admin',
+  created_at timestamptz not null default now());
+-- migrate-new-tables.ts
+create table if not exists public.event_maps (
+  id varchar primary key default gen_random_uuid(), event_id varchar not null references public.events(id) on delete cascade,
+  name text not null, svg_data text, image_url text, sections json default '[]', created_at timestamp not null default now(),
+  updated_at timestamp not null default now());
+-- drizzle-kit push of a shared/schema.ts table missing remotely (e.g. carts)
+create table public.carts (id varchar primary key default gen_random_uuid(), session_id text, items json, created_at timestamp default now());
+select rt_test.ok(not has_table_privilege('anon', 'public.push_subscriptions', 'select')
+              and not has_table_privilege('authenticated', 'public.push_subscriptions', 'select'),
+  'new runtime table `push_subscriptions` (push secrets) is not exposed');
+select rt_test.ok(not has_table_privilege('anon', 'public.event_maps', 'select,insert'), 'new runtime table `event_maps` is not exposed');
+select rt_test.ok(not has_table_privilege('anon', 'public.carts', 'select,insert'), 'tables created by drizzle-kit push are not exposed');
+insert into public.session (sid, sess, expire) values ('s1', '{"userId":"u-buyer"}', now() + interval '1 day');
+insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values ('u-admin', 'https://push.example.test/1', 'k', 'a');
+insert into public.event_maps (event_id, name) values ('e1', 'Mapa');
+select rt_test.ok((select count(*) from public.session) + (select count(*) from public.push_subscriptions) + (select count(*) from public.event_maps) = 3,
+  'backend keeps full access to the tables it creates at runtime');
 rollback;
 
 drop schema rt_test cascade;

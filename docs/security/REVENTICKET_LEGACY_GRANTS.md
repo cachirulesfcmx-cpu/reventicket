@@ -1,175 +1,159 @@
-# RevenTicket: permisos de las tablas antiguas — auditoría y plan de corrección
+# RevenTicket: permisos de las tablas antiguas — auditoría final y plan de mínimo privilegio
 
-Estado: **PLAN PARA REVISIÓN — no aplicado.** Auditoría de solo lectura del 2026-10-29 sobre el proyecto Supabase
-`reventicket` (`jxdyrzbeykhswpndoing`, PostgreSQL 17.6). No se escribió en la base de datos, no se tocó MelatePro,
-VANTA EDGE ni la rama `main`. No se leyeron hashes, OTP, tokens ni datos personales (solo estructura, privilegios y recuentos).
+Estado: **PREPARADO, NO APLICADO.** La ejecución remota queda bloqueada hasta que el usuario (1) confirme la base de
+datos real de producción y (2) dé la autorización final. Todo lo remoto de este documento son lecturas
+(privilegios, estructura, recuentos y una huella de ids); no se leyeron hashes, OTP, tokens ni datos personales.
+MelatePro, VANTA EDGE y `main` no se modificaron.
 
-## 1. Auditoría (fase 1)
+Hallazgos de la aplicación (registro como admin, contraseña admin en texto plano, OTP en texto plano, desfase de
+esquema) → `docs/security/REVENTICKET_APP_FINDINGS.md`, con parches separados.
 
-### Cómo accede la aplicación
+## 1. Destino de producción — **NO CONFIRMADO**
 
-| Pregunta | Evidencia | Conclusión |
+| Evidencia (rama `main`, commit `1903f11`) | Qué indica |
+|---|---|
+| `vercel.json`: el frontend reescribe `/api/*` a `https://reventicket-production.up.railway.app` | El backend de producción es un servicio de **Railway** |
+| `railway.json` / `nixpacks.toml`: `npm run start` = `node dist/index.cjs` | Railway ejecuta el bundle CJS |
+| `server/db.ts`: `pg.Pool({ connectionString: DATABASE_URL })` | La base es la que diga `DATABASE_URL` **en las variables de Railway** |
+| `.env.example`: plantilla de pooler de Supabase con usuario `postgres.<ref>` | Plantilla, no prueba del destino real |
+| `.replit`: módulo `postgresql-16` | Hubo una etapa en Replit con su propia base |
+| `GET https://reventicket-production.up.railway.app/api/health` y `https://reventicket.vercel.app/api/health` (2026-10-29) | **404 "Application not found"** de Railway: **no hay backend en ejecución** |
+| Proyecto Supabase `reventicket`: sin conexiones de la app, 0 escrituras desde el último arranque, sin tabla `session` | No prueba nada por sí solo (el backend no está corriendo) |
+
+**Conclusión:** no se puede determinar con la evidencia disponible. El valor de `DATABASE_URL` vive en Railway (y
+quizá en Vercel, cuyas variables devuelven 403 a esta sesión). No se deduce por nombres ni por tablas.
+
+**Cómo confirmarlo sin exponer secretos** (cualquiera de las dos):
+
+1. Railway → servicio `reventicket` → *Variables* → `DATABASE_URL`: indicar **solo** si el host/usuario contiene
+   `jxdyrzbeykhswpndoing` (o el host de otra base). No copiar la contraseña.
+2. Con esa `DATABASE_URL`, ejecutar en un cliente SQL la consulta de solo lectura `verify_remote.sql` y comparar:
+   `fingerprint` = `6b64e07366739007bcde994686687995` y `legacy_row_counts` = 1/3/3/0/0/0/0/0 ⇒ es esta base.
+
+Si producción usa **otra** base: este plan no se aplica tal cual; hay que repetir la auditoría allí (la migración
+lo exige: huella, tablas inesperadas, políticas).
+
+## 2. Auditoría de la migración SQL
+
+Archivo: `supabase/proposals/reventicket/20261029_reventicket_least_privilege.sql` (no está en
+`supabase/migrations/`, así que nada lo aplica automáticamente).
+
+| Requisito | Resultado de la revisión | Cambio hecho en esta fase |
 |---|---|---|
-| ¿REST de Supabase / `supabase-js`? | `git grep` en `main` (commit `1903f11`): ni `@supabase/*`, ni `/rest/v1`, ni `createClient` | **No.** La clave `anon` no interviene en RevenTicket |
-| ¿Conexión directa? | `server/db.ts`: `pg.Pool({ connectionString: DATABASE_URL })` + Drizzle; `.env.example` apunta al pooler con usuario `postgres.<ref>` | **Sí**, rol `postgres` |
-| Rol `postgres` en Supabase | `rolcanlogin=t`, `rolbypassrls=t`, `rolsuper=f`; dueño de las 8 tablas | Su acceso no depende de los grants a `anon`/`authenticated` ni de RLS |
-| Sesiones | `server/routes.ts`: `connect-pg-simple` con `createTableIfMissing: true` (tabla `session`) | Crea tablas **sin RLS** en tiempo de ejecución |
-| Tablas creadas en ejecución | `server/migrate-new-tables.ts`: `discount_codes`, `event_maps` | Mismo patrón: heredan los privilegios por defecto |
-| Control administrativo | `requireAdmin` en el backend (`users.role = 'admin'`) para venues, events, zones, tickets, config, push | La autorización vive en el servidor, no en la base |
-| ¿Está la app usando esta base hoy? | Sin conexiones de la app (solo PostgREST, pgbouncer, mgmt-api, supabase_admin); 0 inserciones/actualizaciones desde el último arranque; no existe la tabla `session` que la app crea al iniciar; faltan tablas de `shared/schema.ts` (`carts`, `payment_reminders`, …) | **Probablemente no**: el backend en producción parece usar otra base. **Debe confirmarse** (ver §7) |
+| Verificar destino | Antes solo comprobaba tablas/dueño/RLS | **Huella obligatoria** (`expected_fingerprint`, md5 de los ids de las 8 tablas, calculada con `verify_remote.sql`); sin rellenar o distinta ⇒ aborta. Comprueba roles `anon`/`authenticated` (Supabase) |
+| Dueño de las tablas y RLS | Sí (`current_user` = dueño de las 8; RLS activo) | — |
+| Abortar ante políticas nuevas / estado inesperado | Políticas: sí | **Aborta si hay relaciones en `public` fuera del alcance auditado** (p. ej. `session`, `push_subscriptions` ⇒ el backend ya corrió ahí) |
+| Retirar solo privilegios de cliente | `REVOKE ALL … FROM anon, authenticated` en las 8 tablas | — |
+| Tablas y secuencias del alcance | 8 tablas (sin secuencias propias: ids `varchar`) | — |
+| Privilegios por defecto para objetos nuevos del rol del backend | `ALTER DEFAULT PRIVILEGES` de `current_user` en `public` (tablas y secuencias) | Postcondición nueva: falla si aún conceden a clientes |
+| Preservar `postgres` y `service_role` | No se tocan | Probado |
+| Registro privado de lo retirado | `reventicket_audit.revoked_privileges` (esquema sin acceso de clientes ni expuesto por la API) | — |
+| Transaccional, sin estado parcial | Varias sentencias: dependía del cliente | **Reescrita como UNA sola sentencia `DO`**: atómica con cualquier cliente; probado inyectando un fallo tras los `REVOKE` |
+| Reversión limitada a lo guardado | `…_down.sql` restaura solo filas registradas y no restauradas, en tablas existentes; idempotente | — |
+| PostgreSQL 17 (`MAINTAIN`) | El remoto es 17.6 | Postcondición y verificación incluyen `MAINTAIN` en ≥17 |
 
-### Operaciones por tabla (`server/storage.ts` + `server/seed.ts`, todas vía `DATABASE_URL`)
+**¿Rompe Supabase Auth u otras partes que usan la API pública?** No:
 
-| Tabla | Lectura | Inserción | Actualización | Borrado | Funciones |
+- Supabase Auth trabaja en el esquema `auth` con su propio rol; estas tablas son `public.*` de RevenTicket.
+- VANTA EDGE (web/móvil) solo usa por REST `teams`, `games`, `predictions`, `followed_teams` (búsqueda de
+  `.from(...)` en `apps/`); su trigger de alta (`SECURITY DEFINER`) escribe en `profiles`/`user_preferences`.
+  Su suite de 41 aserciones pasa después de aplicar la migración (local).
+- Efecto colateral intencionado: tablas **nuevas** creadas por `postgres` en `public` ya no serán accesibles por
+  REST sin `GRANT` explícito. Las migraciones de VANTA ya conceden explícitamente.
+
+## 3. Tablas que el backend crea al arrancar
+
+| Tabla | Quién la crea | Cuándo | RLS | Privilegios hoy (sin migración) | Con la migración |
 |---|---|---|---|---|---|
-| `users` | sí | sí (registro, seed) | — | — | `getUser`, `getUserByEmail`, `createUser` |
-| `otp_codes` | sí | sí | sí (marcar usado) | — | `createOtpCode`, `getValidOtpCode`, `markOtpVerified` |
-| `orders` | sí | sí | sí (estado, teléfono) | — | `createOrder`, `updateOrderStatus`, `atomicConfirmPayment`, `getOrdersByUser`, … |
-| `tickets` | sí | sí (admin) | sí (reserva/venta/expiración) | (cascada) | `atomicPurchase*`, `updateTicketStatus`, `expireReservedTickets*` |
-| `events` | sí | sí (admin) | sí (admin) | sí (admin, cascada) | `createEvent`, `updateEvent`, `deleteEvent` |
-| `venues` | sí | sí (admin) | sí (admin) | — | `createVenue`, `updateVenue` |
-| `zones` | sí | sí (admin) | — | (cascada) | `createZone`, `getZonesByEvent` |
-| `config` | sí | sí (admin) | sí (admin) | — | `getConfig`, `setConfig` |
+| `session` | `connect-pg-simple` (`createTableIfMissing`) con el rol de `DATABASE_URL` | Al arrancar | **No** | ALL a `anon`/`authenticated` | Ninguno para clientes |
+| `push_subscriptions` (endpoint, `p256dh`, `auth`) | `ensurePushTable()` | Al arrancar | **No** | ALL | Ninguno |
+| `discount_codes`, `event_maps` | `server/migrate-new-tables.ts` | Manual | **No** | ALL | Ninguno |
+| 14 tablas de `shared/schema.ts` ausentes en remoto | `npm run db:push` | Manual | **No** | ALL | Ninguno si se crean **después** |
 
-Ninguna operación necesita a `anon` ni a `authenticated`: **todas** las ejecuta el backend como dueño.
+Nota: con el bundle de producción `connect-pg-simple` no encuentra `dist/table.sql` (ENOENT) y **no** crea `session`
+(ver hallazgos de la app). Además, `drizzle-kit push` contra una base que contiene VANTA **propone renombrar tablas
+de VANTA** a tablas de RevenTicket (observado: `ingestion_runs › analytics_events`, `profiles › …`); nunca debe
+ejecutarse `db:push` de RevenTicket contra la base compartida.
 
-### Base de datos
+## 4. Pruebas ejecutadas (resultados reales)
 
-| Elemento | Estado |
-|---|---|
-| Privilegios de tabla | `anon` y `authenticated`: `arwdDxtm` (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN) en las 8 tablas; `service_role` igual |
-| Privilegios por columna | Ninguno |
-| RLS | Activado en las 8; `FORCE RLS` desactivado (el dueño la omite) |
-| Políticas | **0** en las 8 tablas → hoy PostgREST devuelve 0 filas, pero **la única barrera es RLS** |
-| Funciones / vistas / triggers sobre estas tablas | Ninguno. La única función `SECURITY DEFINER` de `public` es `vanta_handle_new_user` (VANTA, acotada a `app=vanta-edge`, sin EXECUTE para clientes) |
-| Secuencias | Ninguna (ids `varchar` con `gen_random_uuid()`) |
-| Privilegios por defecto de `postgres` en `public` | Tablas: ALL a `anon`/`authenticated`; secuencias: `rwU`; funciones: EXECUTE |
-| Event triggers | Solo los de la plataforma (PostgREST, pg_graphql, pg_cron, pg_net) |
-| Filas existentes | 1 `users`, 3 `events`, 3 `venues` (2026-05-08); resto vacías; md5 de ids `a260950f…4249` |
+### 4.1 `supabase/proposals/reventicket/test/run.sh` — PostgreSQL 16.15 y 17.11 (CI incluido)
 
-### Riesgo
+Rol `rt_owner` = réplica de `postgres` de Supabase (dueño, sin superusuario, BYPASSRLS, privilegios por defecto a
+clientes), 8 tablas con la estructura remota real y filas ficticias, migraciones de VANTA.
 
-- La clave `anon` es pública por diseño (VANTA la usa en el navegador) y PostgREST expone `public`. Si alguien
-  desactiva RLS o añade una política permisiva, **cualquiera** puede leer/escribir `users` (hash de contraseña),
-  `otp_codes`, `orders` y `tickets`. Demostrado en local: con RLS desactivado, `anon` lee la fila del usuario.
-- `TRUNCATE` y `MAINTAIN` no están sujetos a RLS.
-- Si el backend se conecta a esta base, creará `session`, `discount_codes` y `event_maps` **sin RLS y con todos
-  los privilegios para `anon`** → sesiones legibles vía REST.
-- Severidad actual: **media**. Si cambia RLS o la app arranca contra esta base: **crítica**.
-
-## 2. Diseño del cambio (fase 2)
-
-Archivos (fuera de `supabase/migrations/` para que nada lo aplique por accidente):
-
-- `supabase/proposals/reventicket/20261029_reventicket_least_privilege.sql` — migración propuesta
-- `supabase/proposals/reventicket/20261029_reventicket_least_privilege_down.sql` — reversión
-- `supabase/proposals/reventicket/verify_remote.sql` — verificación de solo lectura (antes/después)
-- `supabase/proposals/reventicket/test/` — prueba local completa (`run.sh`)
-
-Principios: mínimo privilegio, sin políticas nuevas (no hay necesidad funcional: los clientes no acceden a estas
-tablas), RLS se mantiene, `service_role` intacto (clave solo de servidor), ningún dato se modifica.
-
-### Matriz de permisos
-
-| Rol | Antes (8 tablas) | Después (8 tablas) | Tablas nuevas de `postgres` en `public` (antes → después) |
-|---|---|---|---|
-| `anon` | SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN | **ninguno** | ALL → **ninguno** (secuencias `rwU` → ninguno) |
-| `authenticated` | igual que `anon` | **ninguno** | ALL → **ninguno** (secuencias `rwU` → ninguno) |
-| `service_role` | ALL (BYPASSRLS) | sin cambios | sin cambios |
-| `postgres` (backend, dueño) | ALL (BYPASSRLS) | sin cambios | sin cambios |
-| RLS | activado, 0 políticas | activado, 0 políticas | — |
-
-**Se revocan exactamente** 128 privilegios de tabla (8 tablas × 2 roles × 8) y 22 privilegios por defecto
-(tablas: 8 × 2; secuencias: 3 × 2). Los privilegios por defecto sobre **funciones** no se tocan (fuera de alcance;
-PostgreSQL concede EXECUTE a `PUBLIC` igualmente).
-
-### Salvaguardas de la migración
-
-- **Precondiciones** (aborta sin cambios): las 8 tablas existen, quien ejecuta es su dueño, RLS activado, sin
-  políticas nuevas desde la auditoría, y no hay una aplicación previa activa.
-- **Instantánea**: cada privilegio retirado se guarda en `reventicket_audit.revoked_privileges` (esquema no expuesto,
-  sin acceso de clientes) antes de revocarlo.
-- **Postcondiciones** (aborta y revierte todo): ningún privilegio de cliente restante y RLS activado.
-- Todo en una transacción (`apply_migration` o una sola ejecución en el SQL Editor).
-
-### Impacto esperado por flujo
-
-| Flujo | Rol que lo ejecuta | Impacto |
+| Comprobación | 17.11 | 16.15 |
 |---|---|---|
-| Registro / login / JWT / sesión | backend (`postgres`) | Ninguno |
-| OTP: envío, verificación, recuperación | backend | Ninguno |
-| Compra (`atomicPurchase*`, reservas, `FOR UPDATE`) y confirmación de pago | backend | Ninguno |
-| Emisión de boletos / wallet / escáner | backend | Ninguno |
-| Panel admin (venues, events, zones, tickets, config, push) | backend + `requireAdmin` | Ninguno |
-| Tablas creadas al arrancar (`session`, `discount_codes`, `event_maps`) | backend (dueño) | Se crean igual; **ya no** quedan expuestas a `anon` |
-| Acceso vía REST con la clave `anon` a estas tablas | cliente | **Bloqueado** (hoy ya devuelve 0 filas por RLS) |
-| VANTA EDGE | — | Ninguno (sus migraciones conceden permisos explícitos) |
-| Futuras migraciones de VANTA que creen tablas | — | Deben conceder permisos explícitos (ya es la práctica) |
+| Línea base: anon con SELECT en `users`; con RLS desactivado lee la fila (riesgo real) | PASS | PASS |
+| Guardas (abortan sin cambios): huella sin rellenar, huella errónea, rol no dueño, tabla inesperada (`session`), política añadida | 5/5 PASS | 5/5 PASS |
+| Atomicidad: fallo inyectado tras los `REVOKE` ⇒ ACL, privilegios por defecto y esquema de auditoría intactos (cliente en autocommit) | PASS | PASS |
+| Aplicación con la huella confirmada; instantánea | 128 + 22 | 112 + 20 |
+| Regresión **48/48**: matriz anon/authenticated × 8 tablas; anon sin hashes/OTP/órdenes/boletos/config, sin crear OTP/usuarios, sin TRUNCATE; authenticated sin escalar rol, sin órdenes ajenas, sin borrar boletos, sin reutilizar OTP, sin tocar config; bloqueo aunque RLS se desactive; RLS y 0 políticas; `service_role` intacto; auditoría inaccesible; flujos del backend (registro/login, OTP, alta admin, compra pagada y boleto emitido, wallet, borrado en cascada); `session`, `push_subscriptions`, `event_maps`, `discount_codes`, tablas de `db:push` privadas; backend con acceso completo a ellas | PASS | PASS |
+| Datos preexistentes (md5 de todas las filas) idénticos | PASS | PASS |
+| VANTA: triggers/políticas/permisos idénticos; suite de 41 aserciones | PASS | PASS |
+| Rollback: ACL y privilegios por defecto idénticos al original; datos intactos; idempotente; no toca objetos ni cambios posteriores | PASS | PASS |
+| `verify_remote.sql` tras aplicar: sin acceso de clientes | PASS | PASS |
 
-## 3. Pruebas (fase 4) — resultado local
+### 4.2 `supabase/proposals/reventicket/test/backend-smoke.sh` — **backend real** (`main`, `node dist/index.cjs`), PostgreSQL 17.11
 
-`bash supabase/proposals/reventicket/test/run.sh` (PostgreSQL **16.15 y 17.11**; el remoto es 17.6). Usa un rol
-`rt_owner` que replica a `postgres` de Supabase (dueño, sin superusuario, BYPASSRLS, privilegios por defecto a los
-clientes), las 8 tablas con su estructura real y filas ficticias, y las migraciones de VANTA.
+A/B: mismo backend, misma base, sin y con migración. Rol del backend: `rt_owner`. Datos y secretos ficticios.
 
-| Bloque | Resultado |
+| Escenario | Resultado |
 |---|---|
-| Línea base: `anon` tiene SELECT en `users`; con RLS desactivado lee la fila (riesgo confirmado) | PASS |
-| Precondición: ejecutar con un rol que no es dueño se rechaza y no cambia nada | PASS |
-| Migración aplicada en una transacción; instantánea de 128 + 22 privilegios (PG17) | PASS |
-| Suite de regresión: **44/44** — matriz 16 roles×tablas; anon no lee hashes/OTP/órdenes/boletos/config ni crea OTP/usuarios ni hace TRUNCATE; authenticated no escala roles, no lee órdenes ajenas, no borra boletos, no reutiliza OTP, no cambia config; con RLS desactivado por error, anon sigue sin leer `users`; RLS y 0 políticas intactos; `service_role` intacto; esquema de auditoría inaccesible; backend: registro + login, OTP emitir/validar/usar, alta admin de venue/evento/zona/boleto, compra pagada y boleto emitido, wallet, borrado en cascada; `session`/`discount_codes` nuevas privadas por defecto | PASS |
-| Datos existentes sin cambios (md5 de todas las filas) | PASS |
-| VANTA: triggers, políticas y permisos idénticos; su suite de 41 aserciones sigue pasando | PASS |
-| Rollback: ACL y privilegios por defecto idénticos al original; datos intactos; idempotente | PASS |
-| Rollback no concede nada sobre objetos posteriores ni deshace cambios posteriores no relacionados | PASS |
-| `verify_remote.sql` funciona y no muestra acceso de clientes tras aplicar | PASS |
+| Esquema idéntico al remoto (8 tablas) | 29 pasos **idénticos** A/B; 0 `permission denied` en el log |
+| Esquema completo de `shared/schema.ts` (23 tablas, `db:push` previo) | 29 pasos **idénticos** A/B; compra completa `paid/sold`; 0 `permission denied` |
+| Exposición, esquema remoto | Sin migración: **9** tablas legibles por clientes (incl. `push_subscriptions` creada al arrancar). Con migración: **0** |
+| Exposición, esquema completo | Sin migración: 23. Con migración: 14 (tablas creadas **antes** y fuera del alcance) ⇒ la migración real se niega a ejecutarse en esa base (guarda de tablas inesperadas) |
 
-**No cubierto en local:** el arranque real del servidor de RevenTicket contra una base de prueba (registro, OTP por
-WhatsApp, pago). Se propone como prueba de humo en la fase 5 si el backend usa esta base.
+Fallos idénticos en A y B, ajenos a los permisos (desfase de esquema y bugs de la app): `otp_codes.verified` y
+`events.is_featured` no existen en el esquema remoto; alta de evento por API rechaza fechas en JSON; `session` no se
+crea con el bundle (ENOENT `dist/table.sql`). Ver hallazgos de la app.
 
-Estado remoto **antes** (lectura, 2026-10-29, `verify_remote.sql`): anon/authenticated con privilegios en las 8,
-RLS en las 8, 0 políticas, recuentos 1/3/3/0/0/0/0/0, md5 de ids `a260950f…4249`, 22 privilegios por defecto de
-tablas/secuencias + 2 de funciones, VANTA con 3 triggers y 10 políticas.
+## 5. Riesgos residuales
 
-## 4. Recuperación
-
-1. Si la migración falla, PostgreSQL revierte la transacción completa (pre/postcondiciones incluidas).
-2. Si tras aplicarla algo deja de funcionar: ejecutar `20261029_reventicket_least_privilege_down.sql` como
-   `postgres`. Restaura **solo** los privilegios registrados que falten, en tablas que aún existan; no revoca nada,
-   no concede nada no registrado, es idempotente y deja `restored_at` como rastro de auditoría.
-3. Verificar con `verify_remote.sql` (debe volver a la línea base de §3).
-4. No requiere restaurar datos: la migración no los modifica.
-
-## 5. Riesgos y requisitos de aprobación
-
-| Riesgo | Mitigación |
+| Riesgo | Estado |
 |---|---|
-| El backend de producción usa esta base con un rol distinto de `postgres` | Confirmar antes (ver §7). La migración no afecta a `postgres` ni a `service_role` |
-| Alguna herramienta externa usa la clave `anon`/JWT contra estas tablas | No hay rastro en el código; hoy ya obtendría 0 filas por RLS |
-| Futuras tablas creadas por `postgres` en `public` ya no serán accesibles por REST sin GRANT explícito | Intencionado; documentado. VANTA ya concede explícitamente |
-| Tablas creadas por `supabase_admin` (p. ej. algunas del panel) | Sus privilegios por defecto no cambian (requeriría otro rol); se recomienda revisar las tablas nuevas tras crearlas |
+| Producción usa otra base | **Abierto** hasta confirmar (§1). La huella impide aplicar en una base distinta |
+| El rol de `DATABASE_URL` en producción no es `postgres` | Abierto. Si es otro rol, los privilegios por defecto de **ese** rol no cambian (la migración actúa sobre `current_user`) ⇒ habría que ejecutarla también como ese rol o ampliar |
+| Tablas creadas por `supabase_admin` (algunas acciones del panel) | Sus privilegios por defecto no cambian; revisar tablas nuevas tras crearlas |
+| `db:push` de RevenTicket en la base compartida | Puede renombrar/eliminar tablas de VANTA. Procedimiento: prohibido; separar RevenTicket en su propio esquema o proyecto |
+| Hallazgos de la app (registro como admin, etc.) | Independientes de esta migración; parches preparados y validados (ver documento de hallazgos) |
+| Ninguna API externa conocida usa la clave `anon` contra estas tablas | Hoy ya obtendría 0 filas por RLS |
 
-Para aplicar se necesita: (1) **tu aprobación expresa del plan**; (2) confirmación de qué base y rol usa el backend
-de RevenTicket en producción; (3) aceptar la confirmación interactiva de Supabase (o ejecutarlo tú en el SQL Editor).
+## 6. Procedimiento de aplicación (cuando haya confirmación y autorización)
 
-## 6. Fase 5 (solo tras aprobación)
+**Condiciones de aborto (no continuar si cualquiera se cumple):** destino no confirmado; `verify_remote.sql` muestra
+`unexpected_relations_in_public` ≠ null, políticas en tablas antiguas, RLS desactivado, `current_user` ≠ dueño,
+`audit_rows` activos o recuentos distintos de los esperados; CI rojo en el commit a aplicar.
 
-1. `run.sh` en verde en el commit a aplicar (hecho para este plan).
-2. Línea base remota con `verify_remote.sql`.
-3. Aplicar la migración como `postgres` (MCP `apply_migration` con confirmación, o SQL Editor en una sola ejecución).
-4. `verify_remote.sql`: 0 privilegios de cliente, RLS activo, 0 políticas, recuentos y md5 idénticos, VANTA intacto.
-5. Re-ejecutar `supabase/tests/remote_verify.sql` (VANTA, 41/41).
-6. Si el backend usa esta base: prueba de humo de registro, login, OTP, compra y panel admin.
+1. **Pre-check (solo lectura)** en la base confirmada: ejecutar `verify_remote.sql`; guardar el JSON.
+2. Copiar la migración, sustituir `__SET_FROM_VERIFY_REMOTE__` por el `fingerprint` del paso 1 (única edición).
+3. **Aplicar** como `postgres`: MCP `apply_migration` (aceptar la confirmación interactiva) o SQL Editor, **una sola
+   ejecución**. Éxito = `NOTICE RT_APPLIED: 128 table and 22 default privileges revoked and recorded` (PG17).
+   Cualquier `RT_PRECONDITION`/`RT_POSTCONDITION` = nada cambió; parar y reauditar.
+4. **Post-check (solo lectura)** `verify_remote.sql`: anon/authenticated `false` en las 8; `rls` `true`; 0 políticas;
+   `fingerprint` y recuentos idénticos al paso 1; `default_privileges_for_current_user` sin tablas/secuencias para
+   clientes (quedan solo las 2 de funciones, fuera de alcance); `audit_rows` = 150; VANTA con 3 triggers y 10
+   políticas, `anon_odds`/`anon_raw_metadata` `false`.
+5. **VANTA**: re-ejecutar `supabase/tests/remote_verify.sql` ⇒ `VANTA_REMOTE_SUITE_PASSED: 41/41`.
+6. **Prueba de humo del backend real** (solo si producción usa esta base y el backend está desplegado): health 200;
+   registro + login (sesión y JWT); `jwt-login` admin; OTP envío/verificación; alta admin de recinto/zona/boleto;
+   compra y confirmación de pago (`paid/sold`); listado de órdenes admin; logs sin `permission denied`. Usar
+   cuentas de prueba y borrarlas después desde el panel admin. Si la app no está desplegada (hoy: 404), se acepta
+   como evidencia la prueba A/B local (§4.2).
 7. Documentar resultados y publicar en `claude/studia-audit-implementation-deploy-jt3wi9`.
 
-## 7. Pendiente de confirmar por el usuario
+**Recuperación:** si el paso 3 falla, no hay nada que deshacer (una sola sentencia). Si los pasos 4–6 muestran un
+problema atribuible a la migración: ejecutar `20261029_reventicket_least_privilege_down.sql` como `postgres`
+(restaura solo lo registrado; idempotente), repetir `verify_remote.sql` y comparar con el paso 1. Los datos no
+se tocan en ningún caso.
 
-- ¿A qué base apunta `DATABASE_URL` del backend de RevenTicket en producción (Railway/Vercel)? La evidencia indica
-  que **no** a esta. No pude leer las variables de entorno (Vercel devuelve 403).
+## 7. Acción exacta que debe confirmar el usuario
 
-## 8. Otros hallazgos (fuera de alcance, sin cambios)
+1. **Destino:** "La `DATABASE_URL` del backend de RevenTicket en producción apunta a `jxdyrzbeykhswpndoing`
+   (o a otra base: indicar cuál), con el usuario `postgres`" — o el resultado de `verify_remote.sql` ejecutado con
+   esa conexión.
+2. **Autorización:** "Autorizo aplicar `20261029_reventicket_least_privilege.sql` en `jxdyrzbeykhswpndoing` con el
+   procedimiento de §6".
 
-- `otp_codes.code` se guarda en texto plano; recomendable guardar un hash y limitar intentos.
-- Login admin compara `ADMIN_PASSWORD` en texto plano con `===` (no en tiempo constante) como alternativa a bcrypt.
-- `connect-pg-simple` y `migrate-new-tables.ts` crean tablas sin `enable row level security`.
-- El esquema remoto está desfasado respecto a `shared/schema.ts` (faltan `carts`, `payment_reminders`, etc.).
+Sin ambas, no se ejecuta ningún cambio remoto.

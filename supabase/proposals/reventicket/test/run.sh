@@ -53,12 +53,33 @@ chk "baseline: anon holds SELECT on users (current remote state)" '[ "$("${SU[@]
 leak=$("${SU[@]}" -c "begin; alter table public.users disable row level security; set local role anon; select count(*) from public.users; rollback;" | sed -n 1p)
 chk "baseline: if RLS were disabled, anon could read the user row incl. password hash (risk confirmed)" '[ "$leak" = "1" ]'
 
-# Guard: wrong role is rejected and nothing changes.
-if "${SU[@]}" -1 -f "$MIG" >/dev/null 2>"$WORK/guard.err"; then fail "migration ran as a non-owner"; fi
-chk "guard: refuses to run as a role that does not own the tables; ACLs unchanged" 'grep -q RT_PRECONDITION "$WORK/guard.err" && [ "$(acl)" = "$ACL0" ]'
+# Fingerprint the target exactly as an operator would (read-only verify_remote.sql), then fill it in.
+fp() { "${OWN[@]}" -f "$HERE/../verify_remote.sql" | python3 -c "import json,sys; print(json.load(sys.stdin)['fingerprint'])"; }
+FP=$(fp)
+FILLED="$WORK/mig_filled.sql"; sed "s/__SET_FROM_VERIFY_REMOTE__'; *$/$FP';/" "$MIG" > "$FILLED"
+sed "0,/__SET_FROM_VERIFY_REMOTE__/s//00000000000000000000000000000000/" "$MIG" > "$WORK/mig_wrongfp.sql"
+chmod a+r "$WORK"/*.sql
+grep -q "'$FP';" "$FILLED" || fail "could not fill the fingerprint"
+rejects() { # $1 = migration file, $2 = expected error tag, $3 = runner (OWN|SU)
+  local -n RUN=$3
+  if "${RUN[@]}" -f "$1" >/dev/null 2>"$WORK/err"; then return 1; fi
+  grep -q "$2" "$WORK/err" && [ "$(acl)" = "$ACL0" ] && [ "$(dacl)" = "$DACL0" ] && [ "$("${SU[@]}" -c "select to_regnamespace('reventicket_audit') is null")" = "t" ]
+}
+chk "guard: unfilled fingerprint aborts, nothing changed" 'rejects "$MIG" "expected_fingerprint not set" OWN'
+chk "guard: wrong fingerprint (other database / data changed) aborts, nothing changed" 'rejects "$WORK/mig_wrongfp.sql" "fingerprint mismatch" OWN'
+chk "guard: a role that does not own the tables is refused, nothing changed" 'rejects "$FILLED" "run as the owner" SU'
+"${OWN[@]}" -c "create table public.session (sid varchar primary key, sess json not null, expire timestamp(6) not null)" >/dev/null
+chk "guard: unexpected table in public (backend already ran: session) aborts, nothing changed" 'rejects "$FILLED" "unexpected relations in public (session)" OWN'
+"${OWN[@]}" -c "drop table public.session" >/dev/null
+"${OWN[@]}" -c "create policy rt_tmp on public.orders for select to anon using (true)" >/dev/null
+chk "guard: a policy added after the audit aborts, nothing changed" 'rejects "$FILLED" "policies now exist" OWN'
+"${OWN[@]}" -c "drop policy rt_tmp on public.orders" >/dev/null
+# Atomicity: force a failure AFTER the revokes (postcondition) and confirm nothing persisted.
+sed "s/if not (select relrowsecurity from pg_class where oid = ('public.' || t)::regclass) then\n      raise exception 'RT_POSTCONDITION/X/" "$FILLED" | python3 -c "import sys; s=sys.stdin.read(); i=s.index('-- ---------------------------------------------------------------- postconditions'); print(s[:i]+\"raise exception 'RT_INJECTED_FAILURE after revokes';\n  \"+s[i:])" > "$WORK/mig_inject.sql"; chmod a+r "$WORK/mig_inject.sql"
+chk "atomic: a failure after the revokes leaves ACLs, default privileges and audit schema untouched (autocommit client)" 'rejects "$WORK/mig_inject.sql" "RT_INJECTED_FAILURE" OWN'
 
-# Apply.
-chk "migration applied as owner (single transaction)" '"${OWN[@]}" -1 -f "$MIG" >/dev/null'
+# Apply exactly as the SQL Editor would: one request, no psql -1.
+chk "migration applied as owner with the confirmed fingerprint" '"${OWN[@]}" -f "$FILLED" >/dev/null 2>&1'
 recorded=$("${SU[@]}" -c "select count(*) filter (where kind='table')||'/'||count(*) filter (where kind='default') from reventicket_audit.revoked_privileges")
 PER=$("${SU[@]}" -c "select case when current_setting('server_version_num')::int >= 170000 then 8 else 7 end")
 chk "audit trail recorded ${recorded%/*} table privileges (8 tables x 2 roles x $PER) and ${recorded#*/} default privileges" '[ "${recorded%/*}" = "$((16 * PER))" ]'
@@ -67,7 +88,7 @@ chk "audit trail recorded ${recorded%/*} table privileges (8 tables x 2 roles x 
 out=$("${OWN[@]}" -f "$HERE/regression.test.sql" 2>&1) || { echo "$out"; fail "regression suite"; }
 n=$(echo "$out" | grep -c "ok - " || true)
 echo "$out" | grep "ok - " | sed 's/^.*ok - /  ok - /'
-chk "regression suite: $n/44 assertions" '[ "$n" = "44" ]'
+chk "regression suite: $n/48 assertions" '[ "$n" = "48" ]'
 
 chk "existing rows unchanged (md5 of all legacy rows identical)" '[ "$(data)" = "$DATA0" ]'
 chk "VANTA EDGE triggers, policies and grants unchanged" '[ "$(vanta)" = "$VANTA0" ]'
@@ -81,7 +102,7 @@ chk "rollback: data unchanged" '[ "$(data)" = "$DATA0" ]'
 chk "rollback is idempotent (second run restores nothing extra)" '"${OWN[@]}" -1 -f "$DOWN" >/dev/null && [ "$(acl)" = "$ACL0" ]'
 
 # Re-apply, then make later changes the rollback must not touch or extend.
-"${OWN[@]}" -1 -f "$MIG" >/dev/null
+"${OWN[@]}" -f "$FILLED" >/dev/null 2>&1
 chk "re-apply after rollback works" '[ "$("${SU[@]}" -c "select has_table_privilege('\''anon'\'','\''public.users'\'','\''select'\'')")" = "f" ]'
 "${OWN[@]}" -c "create table public.later_private (id int primary key)" >/dev/null           # created while private-by-default
 "${OWN[@]}" -c "revoke all on public.zones from service_role" >/dev/null                      # a later, unrelated hardening
@@ -90,7 +111,8 @@ chk "rollback grants nothing on objects it did not touch (later table stays priv
 chk "rollback does not undo later unrelated changes (service_role revoke on zones kept)" '[ "$("${SU[@]}" -c "select has_table_privilege('\''service_role'\'','\''public.zones'\'','\''select'\'')")" = "f" ]'
 chk "rollback restores exactly the recorded client privileges" '[ "$("${SU[@]}" -c "select has_table_privilege('\''anon'\'','\''public.users'\'','\''select'\'') and has_table_privilege('\''authenticated'\'','\''public.orders'\'','\''truncate'\'')")" = "t" ]'
 
-"${OWN[@]}" -1 -f "$MIG" >/dev/null 2>&1
+"${OWN[@]}" -c "drop table public.later_private" >/dev/null
+"${OWN[@]}" -f "$FILLED" >/dev/null 2>&1
 state=$("${OWN[@]}" -f "$HERE/../verify_remote.sql")
 chk "verify_remote.sql runs read-only and reports no client access after apply" 'echo "$state" | python3 -c "import json,sys; d=json.load(sys.stdin); p=d[\"client_privileges_on_legacy\"]; assert all(not v[\"anon\"] and not v[\"authenticated\"] and v[\"rls\"] for v in p.values()); assert d[\"legacy_policies\"]==0; assert d[\"vanta\"][\"anon_odds\"] is False"'
 
