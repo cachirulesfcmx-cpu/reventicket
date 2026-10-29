@@ -295,14 +295,8 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Credenciales inválidas" });
       }
 
-      // Check env bypass first
-      const adminPass = process.env.ADMIN_PASSWORD;
-      let valid = false;
-      if (adminPass && user.role === "admin" && password === adminPass) {
-        valid = true;
-      } else {
-        valid = await bcrypt.compare(password, user.password);
-      }
+      // Only the bcrypt hash is accepted (the plaintext ADMIN_PASSWORD bypass was removed).
+      const valid = await bcrypt.compare(password, user.password);
 
       if (!valid) {
         return res.status(401).json({ error: "Credenciales inválidas" });
@@ -333,15 +327,8 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Credenciales inválidas" });
       }
 
-      // Admin bypass: check env var first (for admin account only)
-      const adminPass = process.env.ADMIN_PASSWORD;
-      let validPassword = false;
-      
-      if (adminPass && user.role === "admin" && password === adminPass) {
-        validPassword = true;
-      } else {
-        validPassword = await bcrypt.compare(password, user.password);
-      }
+      // Only the bcrypt hash is accepted (the plaintext ADMIN_PASSWORD bypass was removed).
+      const validPassword = await bcrypt.compare(password, user.password);
       
       if (!validPassword) {
         return res.status(401).json({ error: "Credenciales inválidas" });
